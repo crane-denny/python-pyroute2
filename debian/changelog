@@ -1,3 +1,9 @@
+pyroute2 (0.3.3-1~bpo70+1) wheezy-backports; urgency=medium
+
+  * Rebuild for wheezy-backports. 
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Fri, 02 Jan 2015 10:46:47 -0600
+
 pyroute2 (0.3.3-1) unstable; urgency=low
 
   * Initial packaging Closes: #772572
