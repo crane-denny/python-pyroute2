@@ -1,3 +1,2 @@
 version=3
-opts=uversionmangle=s/(rc|dev|a|b|c)/~$1/ \
-https://pypi.python.org/packages/source/p/pyroute2/pyroute2-(.*)\.(?:tar\.gz|zip|tar\.bz2)
+opts=filenamemangle=s/.+\/v?(\d\S*)\.tar\.gz/pyroute2-$1\.tar\.gz/   https://github.com/svinota/pyroute2/tags .*/v?(\d\S*)\.tar\.gz
