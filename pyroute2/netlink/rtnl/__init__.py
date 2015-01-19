@@ -36,8 +36,10 @@ Module contents:
 '''
 
 import os
+import io
 import time
 import subprocess
+from pyroute2.proxy import NetlinkInProxy
 from pyroute2.common import map_namespace
 from pyroute2.common import ANCIENT
 from pyroute2.netlink import NLMSG_ERROR
@@ -50,8 +52,11 @@ from pyroute2.netlink.rtnl.rtmsg import rtmsg
 from pyroute2.netlink.rtnl.ndmsg import ndmsg
 from pyroute2.netlink.rtnl.bomsg import bomsg
 from pyroute2.netlink.rtnl.brmsg import brmsg
+from pyroute2.netlink.rtnl.dhcpmsg import dhcpmsg
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
 from pyroute2.netlink.rtnl.ifaddrmsg import ifaddrmsg
+from pyroute2.netlink.rtnl.tuntapmsg import tuntapmsg
+from pyroute2.netlink.rtnl.tuntapmsg import tuntap_create
 
 
 _ANCIENT_BARRIER = 0.3
@@ -123,6 +128,10 @@ RTM_GETBRIDGE = 88
 RTM_SETBRIDGE = 89
 RTM_GETBOND = 90
 RTM_SETBOND = 91
+RTM_GETDHCP = 92
+RTM_SETDHCP = 93
+RTM_NEWTUNTAP = 94
+RTM_DELTUNTAP = 95
 (RTM_NAMES, RTM_VALUES) = map_namespace('RTM', globals())
 
 TC_H_INGRESS = 0xfffffff1
@@ -208,7 +217,11 @@ class MarshalRtnl(Marshal):
                RTM_GETBRIDGE: brmsg,
                RTM_SETBRIDGE: brmsg,
                RTM_GETBOND: bomsg,
-               RTM_SETBOND: bomsg}
+               RTM_SETBOND: bomsg,
+               RTM_GETDHCP: dhcpmsg,
+               RTM_SETDHCP: dhcpmsg,
+               RTM_NEWTUNTAP: tuntapmsg,
+               RTM_DELTUNTAP: tuntapmsg}
 
     def fix_message(self, msg):
         # FIXME: pls do something with it
@@ -218,7 +231,364 @@ class MarshalRtnl(Marshal):
             pass
 
 
-class IPRSocket(NetlinkSocket):
+class IPRSocketMixin(object):
+
+    def __init__(self):
+        super(IPRSocketMixin, self).__init__(NETLINK_ROUTE)
+        self.marshal = MarshalRtnl()
+        self.get_map = {RTM_NEWLINK: self.get_newlink}
+        self.put_map = {RTM_NEWLINK: self.put_newlink,
+                        RTM_SETLINK: self.put_setlink,
+                        RTM_DELLINK: self.put_dellink,
+                        RTM_SETBRIDGE: self.put_setbr,
+                        RTM_GETBRIDGE: self.put_getbr,
+                        RTM_SETBOND: self.put_setbo,
+                        RTM_GETBOND: self.put_getbo,
+                        RTM_SETDHCP: self.put_setdhcp,
+                        RTM_GETDHCP: self.put_getdhcp}
+        self.ancient = ANCIENT
+
+        class RcvCh(object):
+            def send(this, data):
+                msg = ifinfmsg(data)
+                msg.decode()
+                self.backlog[msg['header']['sequence_number']] = [msg]
+
+        rcvch = RcvCh()
+        self._proxy = NetlinkInProxy(rcvch)
+        self._proxy.pmap = {RTM_NEWTUNTAP: tuntap_create}
+        self._sendto = self.sendto
+        self.sendto = self.proxy_sendto
+
+    def bind(self, groups=RTNL_GROUPS, async=False):
+        super(IPRSocketMixin, self).bind(groups, async=async)
+
+    def name_by_id(self, index):
+        return self.get_links(index)[0].get_attr('IFLA_IFNAME')
+
+    ##
+    # proxy-ng protocol
+    #
+    def proxy_sendto(self, data, address):
+        if not self._proxy.handle(data):
+            self._sendto(data, address)
+
+    ##
+    # proxy protocol
+    #
+    def get(self, *argv, **kwarg):
+        msgs = super(IPRSocketMixin, self).get(*argv, **kwarg)
+        for msg in msgs:
+            mtype = msg['header']['type']
+            if mtype in self.get_map:
+                self.get_map[mtype](msg)
+        return msgs
+
+    def put(self, *argv, **kwarg):
+        if argv[1] in self.put_map:
+            self.put_map[argv[1]](*argv, **kwarg)
+        else:
+            super(IPRSocketMixin, self).put(*argv, **kwarg)
+
+    ##
+    # proxy hooks
+    #
+    def put_newlink(self, msg, *argv, **kwarg):
+        if self.ancient:
+            # get the interface kind
+            linkinfo = msg.get_attr('IFLA_LINKINFO')
+            if linkinfo is not None:
+                kind = [x[1] for x in linkinfo['attrs']
+                        if x[0] == 'IFLA_INFO_KIND']
+                if kind:
+                    kind = kind[0]
+                # not covered types, pass to the system
+                if kind not in ('bridge', 'bond'):
+                    return super(IPRSocketMixin, self).put(msg, *argv, **kwarg)
+                ##
+                # otherwise, create a valid answer --
+                # NLMSG_ERROR with code 0 (no error)
+                ##
+                # FIXME: intercept and return valid RTM_NEWLINK
+                ##
+                response = ifinfmsg()
+                seq = kwarg.get('msg_seq', 0)
+                response['header']['type'] = NLMSG_ERROR
+                response['header']['sequence_number'] = seq
+                # route the request
+                if kind == 'bridge':
+                    compat_create_bridge(msg.get_attr('IFLA_IFNAME'))
+                elif kind == 'bond':
+                    compat_create_bond(msg.get_attr('IFLA_IFNAME'))
+                # while RTM_NEWLINK is not intercepted -- sleep
+                time.sleep(_ANCIENT_BARRIER)
+                response.encode()
+                response = response.copy()
+                self.backlog[seq] = [response]
+        else:
+            # else just send the packet
+            super(IPRSocketMixin, self).put(msg, *argv, **kwarg)
+
+    def get_newlink(self, msg):
+        if self.ancient:
+            ifname = msg.get_attr('IFLA_IFNAME')
+            # fix master
+            master = compat_get_master(ifname)
+            if master is not None:
+                msg['attrs'].append(['IFLA_MASTER', master])
+            # fix linkinfo
+            li = msg.get_attr('IFLA_LINKINFO')
+            if li is not None:
+                kind = li.get_attr('IFLA_INFO_KIND')
+                name = msg.get_attr('IFLA_IFNAME')
+                if (kind is None) and (name is not None):
+                    kind = get_interface_type(kind)
+                    li['attrs'].append(['IFLA_INFO_KIND', kind])
+            msg.reset()
+            msg.encode()
+            return msg
+
+    def put_setdhcp(self, msg, *argv, **kwarg):
+        pass
+
+    def put_getdhcp(self, msg, *argv, **kwarg):
+        address = msg.get_attr('DHCP_ADDRESS')
+        name = msg.get_attr('DHCP_IFNAME')
+
+        options = []
+        agentinfo = None
+        seq = kwarg.get('msg_seq', 0)
+        response = dhcpmsg()
+        response['header']['type'] = RTM_SETDHCP
+        response['header']['sequence_number'] = seq
+        response['index'] = msg['index']
+        response['family'] = msg['family']
+        response['prefixlen'] = msg['prefixlen']
+
+        # so far only dhclient is supported
+        # more agents -- issue a feature request
+
+        # take the first running agent on the interface
+        # TODO: move all the DHCP stuff to a separate module
+        # get the interface name
+        buf = io.BytesIO()
+        buf.write(subprocess.check_output(['ps', 'ax', '--cols', '4096']))
+        buf.seek(0)
+
+        def match_lease(f, name, address):
+            lease_match = False
+            for lease_line in l.readlines():
+                if lease_line.find('interface') > -1:
+                    if lease_line.find('"%s"' % name) > -1:
+                        lease_match = True
+                    else:
+                        lease_match = False
+                elif lease_line.find('fixed-address') > -1 \
+                        and lease_line.find(address) > -1 \
+                        and lease_match:
+                    return True
+
+        for line in buf.readlines():
+            if line.find('/sbin/dhclient') > -1:
+                line = line.split()
+                if line[-1] != name:
+                    continue
+
+                agentinfo = []
+                agentinfo.append(['DHCP_AGENT', 'dhclient'])
+                agentinfo.append(['DHCP_AGENT_PID', int(line[0])])
+                agentinfo.append(['DHCP_AGENT_STATUS', 'running'])
+
+                # that's our dhclient
+                if address is None:
+                    break
+
+                # match the client
+                for field in line:
+                    # 1. extract the lease file
+                    if field == '-lf':
+                        lease = line[line.index(field) + 1]
+                        try:
+                            with open(lease, 'r') as l:
+                                if match_lease(l, name, address):
+                                    options.append(['DHCP_ADDRESS', address])
+                                    break
+                                else:
+                                    agentinfo = []
+                        except IOError:
+                            pass
+                else:
+                    # 2. default lease file
+                    try:
+                        lease = '/var/lib/dhclient/dhclient.leases'
+                        with open(lease, 'r') as l:
+                            if match_lease(l, name, address):
+                                options.append(['DHCP_ADDRESS', address])
+                            else:
+                                agentinfo = []
+                    except IOError:
+                        pass
+                break
+
+        if agentinfo:
+            options.append(['DHCP_AGENTINFO', {'attrs': agentinfo}])
+            options.append(['DHCP_IFNAME', name])
+        response['attrs'] = options
+        response.encode()
+        response = response.copy()
+        self.backlog[seq] = [response]
+
+    def put_getbo(self, msg, *argv, **kwarg):
+        t = '/sys/class/net/%s/bonding/%s'
+        name = msg.get_attr('IFBO_IFNAME')
+        commands = []
+        seq = kwarg.get('msg_seq', 0)
+        response = bomsg()
+        response['header']['type'] = RTM_SETBOND
+        response['header']['sequence_number'] = seq
+        response['index'] = msg['index']
+        response['attrs'] = [['IFBO_COMMANDS', {'attrs': commands}]]
+        for cmd, _ in bomsg.commands.nla_map:
+            try:
+                with open(t % (name, bomsg.nla2name(cmd)), 'r') as f:
+                    value = f.read()
+                if cmd == 'IFBO_MODE':
+                    value = value.split()[1]
+                commands.append([cmd, int(value)])
+            except:
+                pass
+        response.encode()
+        response = response.copy()
+        self.backlog[seq] = [response]
+
+    def put_getbr(self, msg, *argv, **kwarg):
+        t = '/sys/class/net/%s/bridge/%s'
+        name = msg.get_attr('IFBR_IFNAME')
+        commands = []
+        seq = kwarg.get('msg_seq', 0)
+        response = brmsg()
+        response['header']['type'] = RTM_SETBRIDGE
+        response['header']['sequence_number'] = seq
+        response['index'] = msg['index']
+        response['attrs'] = [['IFBR_COMMANDS', {'attrs': commands}]]
+        for cmd, _ in brmsg.commands.nla_map:
+            try:
+                with open(t % (name, brmsg.nla2name(cmd)), 'r') as f:
+                    value = f.read()
+                commands.append([cmd, int(value)])
+            except:
+                pass
+        response.encode()
+        response = response.copy()
+        self.backlog[seq] = [response]
+
+    def put_setbo(self, msg, *argv, **kwarg):
+        #
+        name = msg.get_attr('IFBO_IFNAME')
+        code = 0
+        #
+        for (cmd, value) in msg.get_attr('IFBO_COMMANDS',
+                                         {'attrs': []}).get('attrs', []):
+            cmd = bomsg.nla2name(cmd)
+            code = compat_set_bond(name, cmd, value) or code
+        seq = kwarg.get('msg_seq', 0)
+        response = errmsg()
+        response['header']['type'] = NLMSG_ERROR
+        response['header']['sequence_number'] = seq
+        response['code'] = code
+        response.encode()
+        response = response.copy()
+        self.backlog[seq] = [response]
+
+    def put_setbr(self, msg, *argv, **kwarg):
+        #
+        name = msg.get_attr('IFBR_IFNAME')
+        code = 0
+        # iterate commands:
+        for (cmd, value) in msg.get_attr('IFBR_COMMANDS',
+                                         {'attrs': []}).get('attrs', []):
+            cmd = brmsg.nla2name(cmd)
+            code = compat_set_bridge(name, cmd, value) or code
+
+        seq = kwarg.get('msg_seq', 0)
+        response = errmsg()
+        response['header']['type'] = NLMSG_ERROR
+        response['header']['sequence_number'] = seq
+        response['code'] = code
+        response.encode()
+        response = response.copy()
+        self.backlog[seq] = [response]
+
+    def put_setlink(self, msg, *argv, **kwarg):
+        # is it a port setup?
+        master = msg.get_attr('IFLA_MASTER')
+        if self.ancient and master is not None:
+            seq = kwarg.get('msg_seq', 0)
+            response = ifinfmsg()
+            response['header']['type'] = NLMSG_ERROR
+            response['header']['sequence_number'] = seq
+            ifname = self.name_by_id(msg['index'])
+            if master == 0:
+                # port delete
+                # 1. get the current master
+                m = self.name_by_id(compat_get_master(ifname))
+                # 2. get the type of the master
+                kind = compat_get_type(m)
+                # 3. delete the port
+                if kind == 'bridge':
+                    compat_del_bridge_port(m, ifname)
+                elif kind == 'bond':
+                    compat_del_bond_port(m, ifname)
+            else:
+                # port add
+                # 1. get the name of the master
+                m = self.name_by_id(master)
+                # 2. get the type of the master
+                kind = compat_get_type(m)
+                # 3. add the port
+                if kind == 'bridge':
+                    compat_add_bridge_port(m, ifname)
+                elif kind == 'bond':
+                    compat_add_bond_port(m, ifname)
+            response.encode()
+            response = response.copy()
+            self.backlog[seq] = [response]
+        super(IPRSocketMixin, self).put(msg, *argv, **kwarg)
+
+    def put_dellink(self, msg, *argv, **kwarg):
+        if self.ancient:
+            # get the interface kind
+            kind = compat_get_type(msg.get_attr('IFLA_IFNAME'))
+
+            # not covered types pass to the system
+            if kind not in ('bridge', 'bond'):
+                return super(IPRSocketMixin, self).put(msg, *argv, **kwarg)
+            ##
+            # otherwise, create a valid answer --
+            # NLMSG_ERROR with code 0 (no error)
+            ##
+            # FIXME: intercept and return valid RTM_NEWLINK
+            ##
+            seq = kwarg.get('msg_seq', 0)
+            response = ifinfmsg()
+            response['header']['type'] = NLMSG_ERROR
+            response['header']['sequence_number'] = seq
+            # route the request
+            if kind == 'bridge':
+                compat_del_bridge(msg.get_attr('IFLA_IFNAME'))
+            elif kind == 'bond':
+                compat_del_bond(msg.get_attr('IFLA_IFNAME'))
+            # while RTM_NEWLINK is not intercepted -- sleep
+            time.sleep(_ANCIENT_BARRIER)
+            response.encode()
+            response = response.copy()
+            self.backlog[seq] = [response]
+        else:
+            # else just send the packet
+            super(IPRSocketMixin, self).put(msg, *argv, **kwarg)
+
+
+class IPRSocket(IPRSocketMixin, NetlinkSocket):
     '''
     The simplest class, that connects together the netlink parser and
     a generic Python socket implementation. Provides method get() to
@@ -272,253 +642,7 @@ class IPRSocket(NetlinkSocket):
           'type': 1}]
         >>>
     '''
-
-    def __init__(self):
-        NetlinkSocket.__init__(self, NETLINK_ROUTE)
-        self.marshal = MarshalRtnl()
-        self.get_map = {RTM_NEWLINK: self.get_newlink}
-        self.put_map = {RTM_NEWLINK: self.put_newlink,
-                        RTM_SETLINK: self.put_setlink,
-                        RTM_DELLINK: self.put_dellink,
-                        RTM_SETBRIDGE: self.put_setbr,
-                        RTM_GETBRIDGE: self.put_getbr,
-                        RTM_SETBOND: self.put_setbo,
-                        RTM_GETBOND: self.put_getbo}
-        self.ancient = ANCIENT
-
-    def bind(self, groups=RTNL_GROUPS, async=False):
-        '''
-        It is required to call *IPRSocket.bind()* after creation.
-        The call subscribes the NetlinkSocket to default RTNL
-        groups (`RTNL_GROUPS`) or to a requested group set.
-        '''
-        NetlinkSocket.bind(self, groups, async=async)
-
-    def name_by_id(self, index):
-        return self.get_links(index)[0].get_attr('IFLA_IFNAME')
-
-    ##
-    # proxy protocol
-    #
-    def get(self, *argv, **kwarg):
-        '''
-        Proxy `get()` request
-        '''
-        msgs = NetlinkSocket.get(self, *argv, **kwarg)
-        for msg in msgs:
-            mtype = msg['header']['type']
-            if mtype in self.get_map:
-                self.get_map[mtype](msg)
-        return msgs
-
-    def put(self, *argv, **kwarg):
-        '''
-        Proxy `put()` request
-        '''
-        if argv[1] in self.put_map:
-            self.put_map[argv[1]](*argv, **kwarg)
-        else:
-            NetlinkSocket.put(self, *argv, **kwarg)
-
-    ##
-    # proxy hooks
-    #
-    def put_newlink(self, msg, *argv, **kwarg):
-        if self.ancient:
-            # get the interface kind
-            linkinfo = msg.get_attr('IFLA_LINKINFO')
-            if linkinfo is not None:
-                kind = [x[1] for x in linkinfo['attrs']
-                        if x[0] == 'IFLA_INFO_KIND']
-                if kind:
-                    kind = kind[0]
-                # not covered types, pass to the system
-                if kind not in ('bridge', 'bond'):
-                    return NetlinkSocket.put(self, msg, *argv, **kwarg)
-                ##
-                # otherwise, create a valid answer --
-                # NLMSG_ERROR with code 0 (no error)
-                ##
-                # FIXME: intercept and return valid RTM_NEWLINK
-                ##
-                response = ifinfmsg()
-                seq = kwarg.get('msg_seq', 0)
-                response['header']['type'] = NLMSG_ERROR
-                response['header']['sequence_number'] = seq
-                # route the request
-                if kind == 'bridge':
-                    compat_create_bridge(msg.get_attr('IFLA_IFNAME'))
-                elif kind == 'bond':
-                    compat_create_bond(msg.get_attr('IFLA_IFNAME'))
-                # while RTM_NEWLINK is not intercepted -- sleep
-                time.sleep(_ANCIENT_BARRIER)
-                response.encode()
-                self.backlog[seq] = [response]
-        else:
-            # else just send the packet
-            NetlinkSocket.put(self, msg, *argv, **kwarg)
-
-    def get_newlink(self, msg):
-        if self.ancient:
-            ifname = msg.get_attr('IFLA_IFNAME')
-            # fix master
-            master = compat_get_master(ifname)
-            if master is not None:
-                msg['attrs'].append(['IFLA_MASTER', master])
-            # fix linkinfo
-            li = msg.get_attr('IFLA_LINKINFO')
-            if li is not None:
-                kind = li.get_attr('IFLA_INFO_KIND')
-                name = msg.get_attr('IFLA_IFNAME')
-                if (kind is None) and (name is not None):
-                    kind = get_interface_type(kind)
-                    li['attrs'].append(['IFLA_INFO_KIND', kind])
-            msg.reset()
-            msg.encode()
-            return msg
-
-    def put_getbo(self, msg, *argv, **kwarg):
-        t = '/sys/class/net/%s/bonding/%s'
-        name = msg.get_attr('IFBO_IFNAME')
-        commands = []
-        seq = kwarg.get('msg_seq', 0)
-        response = bomsg()
-        response['header']['type'] = RTM_SETBOND
-        response['header']['sequence_number'] = seq
-        response['index'] = msg['index']
-        response['attrs'] = [['IFBO_COMMANDS', {'attrs': commands}]]
-        for cmd, _ in bomsg.commands.nla_map:
-            try:
-                with open(t % (name, bomsg.nla2name(cmd)), 'r') as f:
-                    value = f.read()
-                if cmd == 'IFBO_MODE':
-                    value = value.split()[1]
-                commands.append([cmd, int(value)])
-            except:
-                pass
-        response.encode()
-        self.backlog[seq] = [response]
-
-    def put_getbr(self, msg, *argv, **kwarg):
-        t = '/sys/class/net/%s/bridge/%s'
-        name = msg.get_attr('IFBR_IFNAME')
-        commands = []
-        seq = kwarg.get('msg_seq', 0)
-        response = brmsg()
-        response['header']['type'] = RTM_SETBRIDGE
-        response['header']['sequence_number'] = seq
-        response['index'] = msg['index']
-        response['attrs'] = [['IFBR_COMMANDS', {'attrs': commands}]]
-        for cmd, _ in brmsg.commands.nla_map:
-            try:
-                with open(t % (name, brmsg.nla2name(cmd)), 'r') as f:
-                    value = f.read()
-                commands.append([cmd, int(value)])
-            except:
-                pass
-        response.encode()
-        self.backlog[seq] = [response]
-
-    def put_setbo(self, msg, *argv, **kwarg):
-        #
-        name = msg.get_attr('IFBO_IFNAME')
-        code = 0
-        #
-        for (cmd, value) in msg.get_attr('IFBO_COMMANDS',
-                                         {'attrs': []}).get('attrs', []):
-            cmd = bomsg.nla2name(cmd)
-            code = compat_set_bond(name, cmd, value) or code
-        seq = kwarg.get('msg_seq', 0)
-        response = errmsg()
-        response['header']['type'] = NLMSG_ERROR
-        response['header']['sequence_number'] = seq
-        response['code'] = code
-        response.encode()
-        self.backlog[seq] = [response]
-
-    def put_setbr(self, msg, *argv, **kwarg):
-        #
-        name = msg.get_attr('IFBR_IFNAME')
-        code = 0
-        # iterate commands:
-        for (cmd, value) in msg.get_attr('IFBR_COMMANDS',
-                                         {'attrs': []}).get('attrs', []):
-            cmd = brmsg.nla2name(cmd)
-            code = compat_set_bridge(name, cmd, value) or code
-
-        seq = kwarg.get('msg_seq', 0)
-        response = errmsg()
-        response['header']['type'] = NLMSG_ERROR
-        response['header']['sequence_number'] = seq
-        response['code'] = code
-        response.encode()
-        self.backlog[seq] = [response]
-
-    def put_setlink(self, msg, *argv, **kwarg):
-        # is it a port setup?
-        master = msg.get_attr('IFLA_MASTER')
-        if self.ancient and master is not None:
-            seq = kwarg.get('msg_seq', 0)
-            response = ifinfmsg()
-            response['header']['type'] = NLMSG_ERROR
-            response['header']['sequence_number'] = seq
-            ifname = self.name_by_id(msg['index'])
-            if master == 0:
-                # port delete
-                # 1. get the current master
-                m = self.name_by_id(compat_get_master(ifname))
-                # 2. get the type of the master
-                kind = compat_get_type(m)
-                # 3. delete the port
-                if kind == 'bridge':
-                    compat_del_bridge_port(m, ifname)
-                elif kind == 'bond':
-                    compat_del_bond_port(m, ifname)
-            else:
-                # port add
-                # 1. get the name of the master
-                m = self.name_by_id(master)
-                # 2. get the type of the master
-                kind = compat_get_type(m)
-                # 3. add the port
-                if kind == 'bridge':
-                    compat_add_bridge_port(m, ifname)
-                elif kind == 'bond':
-                    compat_add_bond_port(m, ifname)
-            response.encode()
-            self.backlog[seq] = [response]
-        NetlinkSocket.put(self, msg, *argv, **kwarg)
-
-    def put_dellink(self, msg, *argv, **kwarg):
-        if self.ancient:
-            # get the interface kind
-            kind = compat_get_type(msg.get_attr('IFLA_IFNAME'))
-
-            # not covered types pass to the system
-            if kind not in ('bridge', 'bond'):
-                return NetlinkSocket.put(self, msg, *argv, **kwarg)
-            ##
-            # otherwise, create a valid answer --
-            # NLMSG_ERROR with code 0 (no error)
-            ##
-            # FIXME: intercept and return valid RTM_NEWLINK
-            ##
-            seq = kwarg.get('msg_seq', 0)
-            response = ifinfmsg()
-            response['header']['type'] = NLMSG_ERROR
-            response['header']['sequence_number'] = seq
-            # route the request
-            if kind == 'bridge':
-                compat_del_bridge(msg.get_attr('IFLA_IFNAME'))
-            elif kind == 'bond':
-                compat_del_bond(msg.get_attr('IFLA_IFNAME'))
-            # while RTM_NEWLINK is not intercepted -- sleep
-            time.sleep(_ANCIENT_BARRIER)
-            response.encode()
-            self.backlog[seq] = [response]
-        else:
-            # else just send the packet
-            NetlinkSocket.put(self, msg, *argv, **kwarg)
+    pass
 
 
 def get_interface_type(name):

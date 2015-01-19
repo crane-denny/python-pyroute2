@@ -5,7 +5,7 @@ from distutils.core import setup
 readme = open("README.md", "r")
 
 setup(name='pyroute2',
-      version='0.3.3',
+      version='0.3.4',
       description='Python Netlink library',
       author='Peter V. Saveliev',
       author_email='peter@svinota.eu',
@@ -26,5 +26,8 @@ setup(name='pyroute2',
                    'Python Modules',
                    'Operating System :: POSIX',
                    'Intended Audience :: Developers',
+                   'Programming Language :: Python :: 2.6',
+                   'Programming Language :: Python :: 2.7',
+                   'Programming Language :: Python :: 3',
                    'Development Status :: 4 - Beta'],
       long_description=readme.read())
