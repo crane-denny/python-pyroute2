@@ -1,3 +1,10 @@
+pyroute2 (0.3.5-1~bpo60+1) squeeze-backports; urgency=medium
+
+  * Rebuild for squeeze-backports.
+  * Update to version 0.3.5
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Thu, 26 Mar 2015 09:27:51 -0500
+
 pyroute2 (0.3.3-1) unstable; urgency=low
 
   * Initial packaging Closes: #772572
