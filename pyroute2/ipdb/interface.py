@@ -6,12 +6,8 @@ from pyroute2.common import basestring
 from pyroute2.common import dqn2int
 from pyroute2.netlink import NetlinkError
 from pyroute2.netlink.rtnl.req import IPLinkRequest
-from pyroute2.netlink.rtnl.req import BridgeRequest
-from pyroute2.netlink.rtnl.req import BondRequest
 from pyroute2.netlink.rtnl.ifinfmsg import IFF_MASK
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
-from pyroute2.netlink.rtnl.brmsg import brmsg
-from pyroute2.netlink.rtnl.bomsg import bomsg
 from pyroute2.ipdb.transactional import Transactional
 from pyroute2.ipdb.transactional import update
 from pyroute2.ipdb.linkedset import LinkedSet
@@ -46,7 +42,7 @@ class Interface(Transactional):
     '''
     _fields_cmp = {'flags': lambda x, y: x & y & IFF_MASK == y & IFF_MASK}
 
-    def __init__(self, ipdb, mode=None):
+    def __init__(self, ipdb, mode=None, parent=None, uid=None):
         '''
         Parameters:
         * ipdb -- ipdb() reference
@@ -69,20 +65,24 @@ class Interface(Transactional):
         self._tb = None
         self._virtual_fields = ('removal', 'flicker', 'state')
         self._xfields = {'common': [ifinfmsg.nla2name(i[0]) for i
-                                    in ifinfmsg.nla_map],
-                         'bridge': [brmsg.nla2name(i[0]) for i
-                                    in brmsg.commands.nla_map],
-                         'bond': [bomsg.nla2name(i[0]) for i
-                                  in bomsg.commands.nla_map]}
-        self._xfields['bridge'].append('index')
-        self._xfields['bond'].append('index')
+                                    in ifinfmsg.nla_map]}
         self._xfields['common'].append('index')
         self._xfields['common'].append('flags')
         self._xfields['common'].append('mask')
         self._xfields['common'].append('change')
         self._xfields['common'].append('kind')
+        self._xfields['common'].append('peer')
         self._xfields['common'].append('vlan_id')
         self._xfields['common'].append('bond_mode')
+        brmsg = ifinfmsg.ifinfo.bridge_data
+        self._xfields['common'].extend([brmsg.nla2name(i[0]) for i
+                                        in brmsg.nla_map])
+        bomsg = ifinfmsg.ifinfo.bond_data
+        self._xfields['common'].extend([bomsg.nla2name(i[0]) for i
+                                        in bomsg.nla_map])
+        tuntap = ifinfmsg.ifinfo.tuntap_data
+        self._xfields['common'].extend([tuntap.nla2name(i[0]) for i
+                                        in tuntap.nla_map])
         for ftype in self._xfields:
             self._fields += self._xfields[ftype]
         self._fields.extend(self._virtual_fields)
@@ -158,30 +158,11 @@ class Interface(Transactional):
                 elif key == 'ports':
                     for port in data[key]:
                         self.add_port(port)
+                elif key == 'neighbors':
+                    # ignore neighbors on load
+                    pass
                 else:
                     self[key] = data[key]
-
-    def load_bridge(self):
-        '''
-        '''
-        with self._direct_state:
-            dev = self.nl.get_bridge(self['index'], self['ifname'])[0]
-            attrs = dev.get_attr('IFBR_COMMANDS',
-                                 {'attrs': []}).get('attrs', [])
-            for (name, value) in [x[:2] for x in attrs]:
-                norm = brmsg.nla2name(name)
-                self[norm] = value
-
-    def load_bond(self):
-        '''
-        '''
-        with self._direct_state:
-            dev = self.nl.get_bond(self['index'], self['ifname'])[0]
-            attrs = dev.get_attr('IFBO_COMMANDS',
-                                 {'attrs': []}).get('attrs', [])
-            for (name, value) in [x[:2] for x in attrs]:
-                norm = bomsg.nla2name(name)
-                self[norm] = value
 
     def load_netlink(self, dev):
         '''
@@ -211,13 +192,8 @@ class Interface(Transactional):
             # the rest is possible only when interface
             # is used in IPDB, not standalone
             if self.ipdb is not None:
-                # connect IP address set from IPDB
                 self['ipaddr'] = self.ipdb.ipaddr[self['index']]
-            # poll bridge & bond info
-            if self.get('kind', None) == 'bridge':
-                self.load_bridge()
-            elif self.get('kind', None) == 'bond':
-                self.load_bond()
+                self['neighbors'] = self.ipdb.neighbors[self['index']]
             # finally, cleanup all not needed
             for item in self.cleanup:
                 if item in self:
@@ -229,7 +205,8 @@ class Interface(Transactional):
         self._load_event.set()
 
     @update
-    def add_ip(self, direct, ip, mask=None):
+    def add_ip(self, direct, ip, mask=None,
+               brd=None, broadcast=None):
         '''
         Add IP address to an interface
         '''
@@ -240,16 +217,21 @@ class Interface(Transactional):
                 mask = dqn2int(mask)
             else:
                 mask = int(mask, 0)
+        brd = brd or broadcast
         # FIXME: make it more generic
         # skip IPv6 link-local addresses
         if ip[:4] == 'fe80' and mask == 64:
             return self
         if not direct:
             transaction = self.last()
-            transaction.add_ip(ip, mask)
+            transaction.add_ip(ip, mask, brd)
         else:
             self['ipaddr'].unlink((ip, mask))
-            self['ipaddr'].add((ip, mask))
+            if brd is not None:
+                raw = {'IFA_BROADCAST': brd}
+                self['ipaddr'].add((ip, mask), raw=raw)
+            else:
+                self['ipaddr'].add((ip, mask))
         return self
 
     @update
@@ -325,7 +307,7 @@ class Interface(Transactional):
                 ret[key] = self[key]
         return ret
 
-    def commit(self, tid=None, transaction=None, rollback=False):
+    def commit(self, tid=None, transaction=None, rollback=False, newif=False):
         '''
         Commit transaction. In the case of exception all
         changes applied during commit will be reverted.
@@ -351,6 +333,7 @@ class Interface(Transactional):
                 # create watchdog
                 wd = self.ipdb.watchdog(ifname=self['ifname'])
 
+                newif = True
                 try:
                     # 8<----------------------------------------------------
                     # ACHTUNG: hack for old platforms
@@ -398,78 +381,6 @@ class Interface(Transactional):
         try:
             removed = snapshot - transaction
             added = transaction - snapshot
-
-            # 8<---------------------------------------------
-            # IP address changes
-            self['ipaddr'].set_target(transaction['ipaddr'])
-
-            for i in removed['ipaddr']:
-                # Ignore link-local IPv6 addresses
-                if i[0][:4] == 'fe80' and i[1] == 64:
-                    continue
-                # When you remove a primary IP addr, all subnetwork
-                # can be removed. In this case you will fail, but
-                # it is OK, no need to roll back
-                try:
-                    self.nl.addr('delete', self['index'], i[0], i[1])
-                except NetlinkError as x:
-                    # bypass only errno 99, 'Cannot assign address'
-                    if x.code != 99:
-                        raise
-                except socket.error as x:
-                    # bypass illegal IP requests
-                    if not x.args[0].startswith('illegal IP'):
-                        raise
-
-            for i in added['ipaddr']:
-                # Ignore link-local IPv6 addresses
-                if i[0][:4] == 'fe80' and i[1] == 64:
-                    continue
-                self.nl.addr('add', self['index'], i[0], i[1])
-
-                # 8<--------------------------------------
-                # FIXME: kernel bug, sometimes `addr add` for
-                # bond interfaces returns success, but does
-                # really nothing
-
-                if self['kind'] == 'bond':
-                    while True:
-                        try:
-                            # dirtiest hack, but we have to use it here
-                            time.sleep(0.1)
-                            self.nl.addr('add', self['index'], i[0], i[1])
-                        # continue to try to add the address
-                        # until the kernel reports `file exists`
-                        #
-                        # a stupid solution, but must help
-                        except NetlinkError as e:
-                            if e.code == 17:
-                                break
-                            else:
-                                raise
-                        except Exception:
-                            raise
-                # 8<--------------------------------------
-
-            if removed['ipaddr'] or added['ipaddr']:
-                # 8<--------------------------------------
-                # bond and bridge interfaces do not send
-                # IPv6 address updates, when are down
-                #
-                # beside of that, bridge interfaces are
-                # down by default, so they never send
-                # address updates from beginning
-                #
-                # so if we need, force address load
-                #
-                # FIXME: probably, we should handle other
-                # types as well
-                if self['kind'] in ('bond', 'bridge'):
-                    self.nl.get_addr()
-                # 8<--------------------------------------
-                self['ipaddr'].target.wait(SYNC_TIMEOUT)
-                if not self['ipaddr'].target.is_set():
-                    raise CommitException('ipaddr target is not set')
 
             # 8<---------------------------------------------
             # Interface slaves
@@ -527,45 +438,112 @@ class Interface(Transactional):
             if any([request[item] is not None for item in request
                     if item != 'index']):
                 self.nl.link('set', **request)
+                # hardcoded pause -- if the interface was moved
+                # across network namespaces
+                if 'net_ns_fd' in request:
+                    time.sleep(0.5)
 
-            # bridge changes
-            if self['kind'] == 'bridge':
-                brq = BridgeRequest()
-                for key in added:
-                    if key in self._xfields['bridge']:
-                        brq[key] = added[key]
+            # 8<---------------------------------------------
+            # IP address changes
+            self['ipaddr'].set_target(transaction['ipaddr'])
 
-                brq['index'] = self['index']
-                brq['ifname'] = self['ifname']
-                self.nl.setbr(**brq)
-                self.load_bridge()
+            for i in removed['ipaddr']:
+                # Ignore link-local IPv6 addresses
+                if i[0][:4] == 'fe80' and i[1] == 64:
+                    continue
+                # When you remove a primary IP addr, all subnetwork
+                # can be removed. In this case you will fail, but
+                # it is OK, no need to roll back
+                try:
+                    self.nl.addr('delete', self['index'], i[0], i[1])
+                except NetlinkError as x:
+                    # bypass only errno 99, 'Cannot assign address'
+                    if x.code != 99:
+                        raise
+                except socket.error as x:
+                    # bypass illegal IP requests
+                    if not x.args[0].startswith('illegal IP'):
+                        raise
 
-            # bridge changes
-            if self['kind'] == 'bond':
-                boq = BondRequest()
-                for key in added:
-                    if key in self._xfields['bond']:
-                        boq[key] = added[key]
+            for i in added['ipaddr']:
+                # Ignore link-local IPv6 addresses
+                if i[0][:4] == 'fe80' and i[1] == 64:
+                    continue
+                # Try to fetch additional address attributes
+                try:
+                    kwarg = transaction.ipaddr[i]
+                except KeyError:
+                    kwarg = None
+                self.nl.addr('add', self['index'], i[0], i[1],
+                             **kwarg if kwarg else {})
 
-                boq['index'] = self['index']
-                boq['ifname'] = self['ifname']
-                self.nl.setbo(**boq)
-                self.load_bond()
+                # 8<--------------------------------------
+                # FIXME: kernel bug, sometimes `addr add` for
+                # bond interfaces returns success, but does
+                # really nothing
 
+                if self['kind'] == 'bond':
+                    while True:
+                        try:
+                            # dirtiest hack, but we have to use it here
+                            time.sleep(0.1)
+                            self.nl.addr('add', self['index'], i[0], i[1])
+                        # continue to try to add the address
+                        # until the kernel reports `file exists`
+                        #
+                        # a stupid solution, but must help
+                        except NetlinkError as e:
+                            if e.code == 17:
+                                break
+                            else:
+                                raise
+                        except Exception:
+                            raise
+                # 8<--------------------------------------
+
+            if removed['ipaddr'] or added['ipaddr']:
+                # 8<--------------------------------------
+                # bond and bridge interfaces do not send
+                # IPv6 address updates, when are down
+                #
+                # beside of that, bridge interfaces are
+                # down by default, so they never send
+                # address updates from beginning
+                #
+                # so if we need, force address load
+                #
+                # FIXME: probably, we should handle other
+                # types as well
+                if self['kind'] in ('bond', 'bridge', 'veth'):
+                    self.nl.get_addr()
+                # 8<--------------------------------------
+                self['ipaddr'].target.wait(SYNC_TIMEOUT)
+                if not self['ipaddr'].target.is_set():
+                    raise CommitException('ipaddr target is not set')
+
+            # 8<---------------------------------------------
             # reload interface to hit targets
             if transaction._targets:
-                self.reload()
+                try:
+                    self.reload()
+                except NetlinkError as e:
+                    if e.code == 19:  # No such device
+                        if ('net_ns_fd' in added) or \
+                                ('net_ns_pid' in added):
+                            # it means, that the device was moved
+                            # to another netns; just give up
+                            if drop:
+                                self.drop(transaction)
+                                return self
 
             # wait for targets
-            for key, target in transaction._targets.items():
-                if key not in self._virtual_fields:
-                    target.wait(SYNC_TIMEOUT)
-                    if not target.is_set():
-                        raise CommitException('target %s is not set' % key)
+            transaction._wait_all_targets()
 
             # 8<---------------------------------------------
             # Interface removal
-            if added.get('removal') or added.get('flicker'):
+            if added.get('removal') or \
+                    added.get('flicker') or\
+                    (newif and rollback):
                 wd = self.ipdb.watchdog(action='RTM_DELLINK',
                                         ifname=self['ifname'])
                 if added.get('flicker'):
@@ -590,7 +568,9 @@ class Interface(Transactional):
         except Exception as e:
             # something went wrong: roll the transaction back
             if not rollback:
-                ret = self.commit(transaction=snapshot, rollback=True)
+                ret = self.commit(transaction=snapshot,
+                                  rollback=True,
+                                  newif=newif)
                 # if some error was returned by the internal
                 # closure, substitute the initial one
                 if isinstance(ret, Exception):
