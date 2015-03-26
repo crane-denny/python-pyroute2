@@ -1,6 +1,6 @@
 Metadata-Version: 1.1
 Name: pyroute2
-Version: 0.3.4
+Version: 0.3.5
 Summary: Python Netlink library
 Home-page: https://github.com/svinota/pyroute2
 Author: Peter V. Saveliev

@@ -502,10 +502,17 @@ class IPDB(object):
             index = msg['index']
             interface = ipdb.interfaces[index]
         '''
+        lock = threading.Lock()
+
+        def safe(*argv, **kwarg):
+            with lock:
+                callback(*argv, **kwarg)
+
+        safe.hook = callback
         if mode == 'post':
-            self._post_callbacks.append(callback)
+            self._post_callbacks.append(safe)
         elif mode == 'pre':
-            self._pre_callbacks.append(callback)
+            self._pre_callbacks.append(safe)
 
     def unregister_callback(self, callback, mode='post'):
         if mode == 'post':
@@ -515,7 +522,7 @@ class IPDB(object):
         else:
             raise KeyError('Unknown callback mode')
         for cb in tuple(cbchain):
-            if callback == cb:
+            if callback == cb.hook:
                 for t in tuple(self._cb_threads):
                     t.join(3)
                 return cbchain.pop(cbchain.index(cb))
@@ -541,10 +548,9 @@ class IPDB(object):
                 self.nl.put({'index': 1}, RTM_GETLINK)
                 self._mthread.join()
             except Exception:
-                # If the transport is shut down, hack the world.
-                # It is possible when the instance gets stopped
-                # by atexit chain
-                self._mthread.setDaemon(True)
+                # Just give up.
+                # We can not handle this case
+                pass
             self.nl.close()
 
     def create(self, kind, ifname, reuse=False, **kwarg):
@@ -675,14 +681,14 @@ class IPDB(object):
             device = \
                 self.interfaces[index] = \
                 self.by_index[index] = self.interfaces[ifname]
-            if old_index in self.ipaddr:
-                self.ipaddr[index] = self.ipaddr[old_index]
+            if old_index in self.interfaces:
                 del self.interfaces[old_index]
                 del self.by_index[old_index]
+            if old_index in self.ipaddr:
+                self.ipaddr[index] = self.ipaddr[old_index]
                 del self.ipaddr[old_index]
             if old_index in self.neighbors:
                 self.neighbors[index] = self.neighbors[old_index]
-                del self.interfaces[old_index]
                 del self.neighbors[old_index]
         else:
             # scenario #3, interface rename

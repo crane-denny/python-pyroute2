@@ -85,10 +85,11 @@ import select
 import struct
 import threading
 import traceback
-import multiprocessing as mp
 from socket import SOL_SOCKET
 from socket import SO_RCVBUF
-from pyroute2 import IPRoute
+from pyroute2.config import MpPipe
+from pyroute2.config import MpProcess
+from pyroute2.iproute import IPRoute
 from pyroute2.netlink.nlsocket import NetlinkMixin
 from pyroute2.netlink.rtnl import IPRSocketMixin
 from pyroute2.iproute import IPRouteMixin
@@ -115,11 +116,11 @@ def listnetns():
             raise
 
 
-def create(netns):
+def create(netns, libc=None):
     '''
     Create a network namespace.
     '''
-    libc = ctypes.CDLL('libc.so.6')
+    libc = libc or ctypes.CDLL('libc.so.6')
     # FIXME validate and prepare NETNS_RUN_DIR
 
     netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
@@ -154,15 +155,37 @@ def create(netns):
         raise OSError(errno.ECOMM, 'mount failed', netns)
 
 
-def remove(netns):
+def remove(netns, libc=None):
     '''
     Remove a network namespace.
     '''
-    libc = ctypes.CDLL('libc.so.6')
+    libc = libc or ctypes.CDLL('libc.so.6')
     netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
     netnspath = netnspath.encode('ascii')
     libc.umount2(netnspath, MNT_DETACH)
     os.unlink(netnspath)
+
+
+def setns(netns, flags=os.O_CREAT, libc=None):
+    '''
+    Set netns for the current process.
+    '''
+    libc = libc or ctypes.CDLL('libc.so.6')
+    netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
+    netnspath = netnspath.encode('ascii')
+
+    if netns in listnetns():
+        if flags & (os.O_CREAT | os.O_EXCL) == (os.O_CREAT | os.O_EXCL):
+            raise OSError(errno.EEXIST, 'netns exists', netns)
+    else:
+        if flags & os.O_CREAT:
+            create(netns, libc=libc)
+
+    nsfd = os.open(netnspath, os.O_RDONLY)
+    ret = libc.syscall(__NR_setns, nsfd, CLONE_NEWNET)
+    if ret != 0:
+        raise OSError(ret, 'failed to open netns', netns)
+    return nsfd
 
 
 def NetNServer(netns, rcvch, cmdch, flags=os.O_CREAT):
@@ -208,11 +231,8 @@ def NetNServer(netns, rcvch, cmdch, flags=os.O_CREAT):
            implementations, but it is required by the protocol standard.
 
     '''
-    netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
-    netnspath = netnspath.encode('ascii')
-    # open libc
     try:
-        libc = ctypes.CDLL('libc.so.6')
+        nsfd = setns(netns, flags)
     except OSError as e:
         cmdch.send(e)
         return e.errno
@@ -220,53 +240,11 @@ def NetNServer(netns, rcvch, cmdch, flags=os.O_CREAT):
         cmdch.send(OSError(errno.ECOMM, str(e), netns))
         return 255
 
-    # 8<-------------------------------------------------------------
-    def list_netns():
-        try:
-            return listnetns()
-        except OSError:
-            return []
-
-    # 8<-------------------------------------------------------------
-    def create_netns():
-        try:
-            return create(netns)
-        except OSError as e:
-            return e
-        except Exception as e:
-            return OSError(errno.ECOMM, str(e), netns)
-
-    # 8<-------------------------------------------------------------
-    #
-    if netns in list_netns():
-        if flags & (os.O_CREAT | os.O_EXCL) == (os.O_CREAT | os.O_EXCL):
-            cmdch.send(OSError(errno.EEXIST, 'netns exists', netns))
-            return errno.EEXIST
-    else:
-        if flags & os.O_CREAT:
-            ret = create_netns()
-            if ret is not None:
-                cmdch.send(ret)
-                return ret.errno
-    try:
-        nsfd = os.open(netnspath, os.O_RDONLY)
-    except OSError as e:
-        cmdch.send(e)
-        return e
-    except Exception as e:
-        cmdch.send(OSError(errno.ECOMM, str(e), netns))
-        return 255
-    #
-    ret = libc.syscall(__NR_setns, nsfd, CLONE_NEWNET)
-    if ret != 0:
-        cmdch.send(OSError(ret, 'failed to open netns', netns))
-        return ret
-
     #
     try:
         ipr = IPRoute()
-        rcvch_lock = ipr._proxy.lock
-        ipr._proxy.rcvch = rcvch
+        rcvch_lock = ipr._sproxy.lock
+        ipr._s_channel = rcvch
         poll = select.poll()
         poll.register(ipr, select.POLLIN | select.POLLPRI)
         poll.register(cmdch, select.POLLIN | select.POLLPRI)
@@ -320,10 +298,10 @@ class NetNSProxy(object):
 
     def __init__(self, *argv, **kwarg):
         self.cmdlock = threading.Lock()
-        self.rcvch, rcvch = mp.Pipe()
-        self.cmdch, cmdch = mp.Pipe()
-        self.server = mp.Process(target=NetNServer,
-                                 args=(self.netns, rcvch, cmdch, self.flags))
+        self.rcvch, rcvch = MpPipe()
+        self.cmdch, cmdch = MpPipe()
+        self.server = MpProcess(target=NetNServer,
+                                args=(self.netns, rcvch, cmdch, self.flags))
         self.server.start()
         error = self.cmdch.recv()
         if error is not None:
@@ -332,7 +310,7 @@ class NetNSProxy(object):
         else:
             atexit.register(self.close)
 
-    def recv(self, bufsize):
+    def recv(self, bufsize, flags=0):
         return self.rcvch.recv()
 
     def close(self):
@@ -418,8 +396,11 @@ class NetNS(IPRouteMixin, NetNSIPR):
         self.netns = netns
         self.flags = flags
         super(NetNS, self).__init__()
+        # disconnect proxy services
         self.sendto = self._sendto
-        self._proxy = None
+        self.recv = self._recv
+        self._sproxy = None
+        self._rproxy = None
 
     def remove(self):
         '''

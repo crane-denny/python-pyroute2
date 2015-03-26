@@ -93,9 +93,9 @@ from socket import MSG_PEEK
 from socket import SOL_SOCKET
 from socket import SO_RCVBUF
 from socket import SO_SNDBUF
-from socket import socket
 from socket import error as SocketError
 
+from pyroute2.config import SocketBase
 from pyroute2.common import AddrPool
 from pyroute2.common import DEFAULT_RCVBUF
 from pyroute2.netlink import nlmsg
@@ -261,7 +261,7 @@ class NetlinkMixin(object):
     def __init__(self, family=NETLINK_GENERIC, port=None, pid=None):
         super(NetlinkMixin, self).__init__(AF_NETLINK, SOCK_DGRAM, family)
         global sockets
-        self.recv_plugin = self.recv
+        self.recv_plugin = self.recv_plugin_init
         # 8<-----------------------------------------
         # PID init is here only for compatibility,
         # later it will be completely moved to bind()
@@ -304,7 +304,7 @@ class NetlinkMixin(object):
         self.close()
 
     def register_callback(self, callback,
-                          predicate=lambda e, x: True, args=None):
+                          predicate=lambda x: True, args=None):
         '''
         Register a callback to run on a message arrival.
 
@@ -317,7 +317,7 @@ class NetlinkMixin(object):
         Simplest example, assume ipr is the IPRoute() instance::
 
             # create a simplest callback that will print messages
-            def cb(env, msg):
+            def cb(msg):
                 print(msg)
 
             # register callback for any message:
@@ -326,12 +326,12 @@ class NetlinkMixin(object):
         More complex example, with filtering::
 
             # Set object's attribute after the message key
-            def cb(env, msg, obj):
+            def cb(msg, obj):
                 obj.some_attr = msg["some key"]
 
             # Register the callback only for the loopback device, index 1:
             ipr.register_callback(cb,
-                                  lambda e, x: x.get('index', None) == 1,
+                                  lambda x: x.get('index', None) == 1,
                                   (self, ))
 
         Please note: you do **not** need to register the default 0 queue
@@ -470,6 +470,19 @@ class NetlinkMixin(object):
             self.pthread.setDaemon(True)
             self.pthread.start()
 
+    def recv_plugin_init(self, *argv, **kwarg):
+        #
+        # One-shot method
+        #
+        # Substitutes itself with the current recv()
+        # pointer.
+        #
+        # It is required since child classes can
+        # initialize recv() in the init()
+        #
+        self.recv_plugin = self.recv
+        return self.recv(*argv, **kwarg)
+
     def recv_plugin_queue(self, *argv, **kwarg):
         data = self.buffer_queue.get()
         if isinstance(data, Exception):
@@ -518,10 +531,11 @@ class NetlinkMixin(object):
         try:
             if msg_seq not in self.backlog:
                 self.backlog[msg_seq] = []
-            msg_class = self.marshal.msg_map[msg_type]
+            if not isinstance(msg, nlmsg):
+                msg_class = self.marshal.msg_map[msg_type]
+                msg = msg_class(msg)
             if msg_pid is None:
                 msg_pid = os.getpid()
-            msg = msg_class(msg)
             msg['header']['type'] = msg_type
             msg['header']['flags'] = msg_flags
             msg['header']['sequence_number'] = msg_seq
@@ -775,5 +789,5 @@ class NetlinkMixin(object):
         super(NetlinkMixin, self).close()
 
 
-class NetlinkSocket(NetlinkMixin, socket):
+class NetlinkSocket(NetlinkMixin, SocketBase):
     pass
