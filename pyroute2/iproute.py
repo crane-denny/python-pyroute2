@@ -91,12 +91,7 @@ from pyroute2.netlink.rtnl import RTM_NEWROUTE
 from pyroute2.netlink.rtnl import RTM_GETROUTE
 from pyroute2.netlink.rtnl import RTM_DELROUTE
 from pyroute2.netlink.rtnl import RTM_SETLINK
-from pyroute2.netlink.rtnl import RTM_SETBRIDGE
-from pyroute2.netlink.rtnl import RTM_GETBRIDGE
-from pyroute2.netlink.rtnl import RTM_SETBOND
-from pyroute2.netlink.rtnl import RTM_GETBOND
 from pyroute2.netlink.rtnl import RTM_GETDHCP
-from pyroute2.netlink.rtnl import RTM_NEWTUNTAP
 from pyroute2.netlink.rtnl import TC_H_INGRESS
 from pyroute2.netlink.rtnl import TC_H_ROOT
 from pyroute2.netlink.rtnl import rtprotos
@@ -113,12 +108,9 @@ from pyroute2.netlink.rtnl.tcmsg import get_fw_parameters
 from pyroute2.netlink.rtnl.tcmsg import tcmsg
 from pyroute2.netlink.rtnl.rtmsg import rtmsg
 from pyroute2.netlink.rtnl.ndmsg import ndmsg
-from pyroute2.netlink.rtnl.brmsg import brmsg
-from pyroute2.netlink.rtnl.bomsg import bomsg
 from pyroute2.netlink.rtnl.dhcpmsg import dhcpmsg
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
 from pyroute2.netlink.rtnl.ifaddrmsg import ifaddrmsg
-from pyroute2.netlink.rtnl.tuntapmsg import tuntapmsg
 from pyroute2.netlink.rtnl import IPRSocket
 
 from pyroute2.common import basestring
@@ -234,13 +226,19 @@ class IPRouteMixin(object):
         msg['family'] = family
         return self.nlm_request(msg, RTM_GETNEIGH)
 
-    def get_addr(self, family=AF_UNSPEC):
+    def get_addr(self, family=AF_UNSPEC, index=None):
         '''
-        Get all addresses.
+        Get addresses::
+            ip.get_addr()  # get all addresses
+            ip.get_addr(index=2)  # get addresses for the 2nd interface
         '''
         msg = ifaddrmsg()
         msg['family'] = family
-        return self.nlm_request(msg, RTM_GETADDR)
+        ret = self.nlm_request(msg, RTM_GETADDR)
+        if index is not None:
+            return [x for x in ret if x.get('index') == index]
+        else:
+            return ret
 
     def get_dhcp(self, name, address=None):
         msg = dhcpmsg()
@@ -249,18 +247,6 @@ class IPRouteMixin(object):
         if address is not None:
             msg['attrs'].append(['DHCP_ADDRESS', address])
         return self.nlm_request(msg, RTM_GETDHCP)
-
-    def get_bond(self, index, name):
-        msg = bomsg()
-        msg['index'] = index
-        msg['attrs'] = [['IFBO_IFNAME', name]]
-        return self.nlm_request(msg, RTM_GETBOND)
-
-    def get_bridge(self, index, name):
-        msg = brmsg()
-        msg['index'] = index
-        msg['attrs'] = [['IFBR_IFNAME', name]]
-        return self.nlm_request(msg, RTM_GETBRIDGE)
 
     def get_rules(self, family=AF_UNSPEC):
         '''
@@ -464,12 +450,7 @@ class IPRouteMixin(object):
         command = commands.get(command, command)
 
         msg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
-        # intercept tuntap messages
-        if command == RTM_NEWLINK and kwarg.get('kind') == 'tuntap':
-            msg = tuntapmsg()
-            command = RTM_NEWTUNTAP
-        else:
-            msg = ifinfmsg()
+        msg = ifinfmsg()
         # index is required
         msg['index'] = kwarg.get('index')
 
@@ -491,28 +472,6 @@ class IPRouteMixin(object):
                 msg['attrs'].append([nla, kwarg[key]])
 
         return self.nlm_request(msg, msg_type=command, msg_flags=msg_flags)
-
-    def setbo(self, **kwarg):
-        command = RTM_SETBOND
-        msg = bomsg()
-
-        for key in kwarg:
-            nla = bomsg.name2nla(key)
-            if kwarg[key] is not None:
-                msg['attrs'].append([nla, kwarg[key]])
-
-        return self.nlm_request(msg, msg_type=command, msg_flags=0)
-
-    def setbr(self, **kwarg):
-        command = RTM_SETBRIDGE
-        msg = brmsg()
-
-        for key in kwarg:
-            nla = brmsg.name2nla(key)
-            if kwarg[key] is not None:
-                msg['attrs'].append([nla, kwarg[key]])
-
-        return self.nlm_request(msg, msg_type=command, msg_flags=0)
 
     def addr(self, command, index, address, mask=24,
              family=None, scope=0, **kwarg):
@@ -562,11 +521,11 @@ class IPRouteMixin(object):
             nla = ifaddrmsg.name2nla(key)
             if kwarg[key] is not None:
                 msg['attrs'].append([nla, kwarg[key]])
-        terminate = lambda x: x['header']['type'] == NLMSG_ERROR
         return self.nlm_request(msg,
                                 msg_type=command,
                                 msg_flags=flags,
-                                terminate=terminate)
+                                terminate=lambda x: x['header']['type'] ==
+                                NLMSG_ERROR)
 
     def tc(self, command, kind, index, handle=0, **kwarg):
         '''

@@ -5,7 +5,7 @@ from distutils.core import setup
 readme = open("README.md", "r")
 
 setup(name='pyroute2',
-      version='0.3.4',
+      version='0.3.5',
       description='Python Netlink library',
       author='Peter V. Saveliev',
       author_email='peter@svinota.eu',
@@ -18,7 +18,8 @@ setup(name='pyroute2',
                 'pyroute2.netlink.ipq',
                 'pyroute2.netlink.nfnetlink',
                 'pyroute2.netlink.rtnl',
-                'pyroute2.netlink.taskstats'],
+                'pyroute2.netlink.taskstats',
+                'pyroute2.netlink.nl80211'],
       classifiers=['License :: OSI Approved :: GNU General Public ' +
                    'License v2 or later (GPLv2+)',
                    'Programming Language :: Python',
