@@ -558,10 +558,7 @@ class nlmsg_base(dict):
         correctly only if the message was encoded, or is
         received from the socket.
         '''
-        buf = io.BytesIO()
-        buf.length = buf.write(self.raw)
-        buf.seek(0)
-        ret = type(self)(buf)
+        ret = type(self)(self.buf.getvalue())
         ret.decode()
         return ret
 
@@ -1107,6 +1104,18 @@ class nlmsg_atoms(nlmsg_base):
 
     class uint32(nla_base):
         fields = [('value', 'I')]
+
+    class uint64(nla_base):
+        fields = [('value', 'Q')]
+
+    class be8(nla_base):
+        fields = [('value', '>B')]
+
+    class be16(nla_base):
+        fields = [('value', '>H')]
+
+    class be32(nla_base):
+        fields = [('value', '>I')]
 
     class ipXaddr(nla_base):
         fields = [('value', 's')]

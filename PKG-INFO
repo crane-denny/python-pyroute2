@@ -1,6 +1,6 @@
 Metadata-Version: 1.1
 Name: pyroute2
-Version: 0.3.3
+Version: 0.3.5
 Summary: Python Netlink library
 Home-page: https://github.com/svinota/pyroute2
 Author: Peter V. Saveliev
@@ -82,9 +82,45 @@ Description: pyroute2
             finally:
                 ip.release()
         
-        
         The project contains several modules for different types of
         netlink messages, not only RTNL.
+        
+        network namespace samples
+        -------------------------
+        
+        Network namespace manipulation::
+        
+            from pyroute2 import netns
+            # create netns
+            netns.create('test')
+            # list
+            print(netns.listnetns())
+            # remove netns
+            netns.remove('test')
+        
+        Create **veth** interfaces pair and move to **netns**::
+        
+            from pyroute2 import IPDB
+        
+            ip = IPDB()
+            # create interface pair
+            ip.create(ifname='v0p0', kind='veth', peer='v0p1').commit()
+            # move peer to netns
+            with ip.interfaces.v0p1 as veth:
+                veth.net_ns_fd = 'test'
+            # don't forget to release before exit
+            ip.release()
+        
+        List interfaces in some **netns**::
+        
+            from pyroute2 import NetNS
+            from pprint import pprint
+        
+            ns = NetNS('test')
+            pprint(ns.get_links())
+            ns.close()
+        
+        More details and samples see in the documentation.
         
         installation
         ------------
@@ -114,4 +150,7 @@ Classifier: Programming Language :: Python
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
 Classifier: Operating System :: POSIX
 Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
 Classifier: Development Status :: 4 - Beta

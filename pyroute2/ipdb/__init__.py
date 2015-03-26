@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 IPDB module
 ===========
@@ -5,7 +6,11 @@ IPDB module
 Basically, IPDB is a transactional database, containing records,
 representing network stack objects. Any change in the database
 is not reflected immediately in OS (unless you ask for that
-explicitly), but waits until commit() is called.
+explicitly), but waits until `commit()` is called. One failed
+operation during `commit()` rolls back all the changes, has been
+made so far. Moreover, IPDB has commit hooks API, that allows
+you to roll back changes depending on your own function calls,
+e.g. when a host or a network becomes unreachable.
 
 IPDB vs. IPRoute
 ----------------
@@ -13,12 +18,34 @@ IPDB vs. IPRoute
 These two modules, IPRoute and IPDB, use completely different
 approaches. The first one, IPRoute, is synchronous by default,
 and can be used in the same way, as usual Linux utilities. It
-doesn't spawn any additional threads or processes, until one
-explicitly calls `IPRoute.bind(async=True)`.
+doesn't spawn any additional threads or processes, until you
+explicitly ask for that.
 
 The latter, IPDB, is an asynchronously updated database, that
 starts several additional threads by default. If your project's
 policy doesn't allow implicit threads, keep it in mind.
+
+The choice depends on your project's workflow. If you plan to
+retrieve the system info not too often (or even once), or you
+are sure there will be not too many network object, it is better
+to use IPRoute. If you plan to lookup the network info  on a
+regular basis and there can be loads of network objects, it is
+better to use IPDB. Why?
+
+IPRoute just loads what you ask -- and loads all the information
+you ask to. While IPDB loads all the info upon startup, and
+later is just updated by asynchronous broadcast netlink messages.
+Assume you want to lookup ARP cache that contains hundreds or
+even thousands of objects. Using IPRoute, you have to load all
+the ARP cache every time you want to make a lookup. While IPDB
+will load all the cache once, and then maintain it up-to-date
+just inserting new records or removing them by one.
+
+So, IPRoute is much simpler when you need to make a call and
+then exit. While IPDB is cheaper in terms of CPU performance
+if you implement a long-running program like a daemon. Later
+it can change, if there will be (an optional) cache for IPRoute
+too.
 
 quickstart
 ----------
@@ -38,6 +65,14 @@ Simple tutorial::
 
     # basic routing support
     ip.routes.add({'dst': 'default', 'gateway': '10.0.0.1'}).commit()
+
+    # do not forget to shutdown IPDB
+    ip.release()
+
+Please, notice `ip.release()` call in the end. Though it is
+not forced in an interactive python session for the better
+user experience, it is required in the scripts to sync the
+IPDB state before exit.
 
 IPDB uses IPRoute as a transport, and monitors all broadcast
 netlink messages from the kernel, thus keeping the database
@@ -74,7 +109,7 @@ class, and has two keys::
     >>>
 
 One can address objects in IPDB not only with dict notation, but
-with dot notation also:
+with dot notation also::
 
     >>> ip.interfaces.em1.address
     'f0:de:f1:93:94:0d'
@@ -204,6 +239,49 @@ Right now IPDB supports creation of `dummy`, `bond`, `bridge`
 and `vlan` interfaces. VLAN creation requires also `link` and
 `vlan_id` parameters, see example scripts.
 
+routing management
+------------------
+
+IPDB has a simple yet useful routing management interface.
+To add a route, one can use almost any syntax::
+
+    # spec as a dictionary
+    spec = {'dst': '172.16.1.0/24',
+            'oif': 4,
+            'gateway': '192.168.122.60',
+            'metrics': {'mtu': 1400,
+                        'advmss': 500}}
+
+    # pass spec as is
+    ip.routes.add(spec).commit()
+
+    # pass spec as kwargs
+    ip.routes.add(**spec).commit()
+
+    # use keyword arguments explicitly
+    ip.routes.add(dst='172.16.1.0/24', oif=4, ...).commit()
+
+To access and change the routes, one can use notations as follows::
+
+    # default table (254)
+    #
+    # change the route gateway and mtu
+    #
+    with ip.routes['172.16.1.0/24'] as route:
+        route.gateway = '192.168.122.60'
+        route.metrics.mtu = 1500
+
+    # access the default route
+    print(ip.routes['default])
+
+    # change the default gateway
+    with ip.routes['default'] as route:
+        route.gateway = '10.0.0.1'
+
+    # list automatic routes keys
+    print(ip.routes.tables[255].keys())
+
+
 performance issues
 ------------------
 
@@ -219,6 +297,7 @@ classes
 -------
 '''
 import sys
+import atexit
 import logging
 import traceback
 import threading
@@ -230,6 +309,7 @@ from pyroute2.iproute import IPRoute
 from pyroute2.netlink.rtnl import RTM_GETLINK
 from pyroute2.ipdb.common import CreateException
 from pyroute2.ipdb.interface import Interface
+from pyroute2.ipdb.linkedset import LinkedSet
 from pyroute2.ipdb.linkedset import IPaddrSet
 from pyroute2.ipdb.common import compat
 from pyroute2.ipdb.common import SYNC_TIMEOUT
@@ -314,9 +394,10 @@ class IPDB(object):
         self._pre_callbacks = []
         self._cb_threads = set()
 
-        # update events
+        # locks and events
         self._links_event = threading.Event()
         self.exclusive = threading.RLock()
+        self._shutdown_lock = threading.Lock()
 
         # load information
         self.restart_on_error = restart_on_error if \
@@ -328,6 +409,8 @@ class IPDB(object):
         if hasattr(sys, 'ps1'):
             self._mthread.setDaemon(True)
         self._mthread.start()
+        #
+        atexit.register(self.release)
 
     def __enter__(self):
         return self
@@ -361,6 +444,7 @@ class IPDB(object):
         for link in links:
             self.update_slaves(link)
         self.update_addr(self.nl.get_addr())
+        self.update_neighbors(self.nl.get_neighbors())
         routes = self.nl.get_routes()
         self.update_routes(routes)
 
@@ -418,10 +502,17 @@ class IPDB(object):
             index = msg['index']
             interface = ipdb.interfaces[index]
         '''
+        lock = threading.Lock()
+
+        def safe(*argv, **kwarg):
+            with lock:
+                callback(*argv, **kwarg)
+
+        safe.hook = callback
         if mode == 'post':
-            self._post_callbacks.append(callback)
+            self._post_callbacks.append(safe)
         elif mode == 'pre':
-            self._pre_callbacks.append(callback)
+            self._pre_callbacks.append(safe)
 
     def unregister_callback(self, callback, mode='post'):
         if mode == 'post':
@@ -431,19 +522,36 @@ class IPDB(object):
         else:
             raise KeyError('Unknown callback mode')
         for cb in tuple(cbchain):
-            if callback == cb:
+            if callback == cb.hook:
                 for t in tuple(self._cb_threads):
                     t.join(3)
                 return cbchain.pop(cbchain.index(cb))
 
     def release(self):
         '''
-        Shutdown monitoring thread and release iproute.
+        Shutdown IPDB instance and sync the state. Since
+        IPDB is asyncronous, some operations continue in the
+        background, e.g. callbacks. So, prior to exit the
+        script, it is required to properly shutdown IPDB.
+
+        The shutdown sequence is not forced in an interactive
+        python session, since it is easier for users and there
+        is enough time to sync the state. But for the scripts
+        the `release()` call is required.
         '''
-        self._stop = True
-        self.nl.put({'index': 1}, RTM_GETLINK)
-        self._mthread.join()
-        self.nl.close()
+        with self._shutdown_lock:
+            if self._stop:
+                return
+
+            self._stop = True
+            try:
+                self.nl.put({'index': 1}, RTM_GETLINK)
+                self._mthread.join()
+            except Exception:
+                # Just give up.
+                # We can not handle this case
+                pass
+            self.nl.close()
 
     def create(self, kind, ifname, reuse=False, **kwarg):
         '''
@@ -456,13 +564,51 @@ class IPDB(object):
           * vlan
           * tun
           * dummy
+          * veth
         * ifname -- interface name
         * reuse -- if such interface exists, return it anyway
 
         Different interface kinds can require different
         arguments for creation.
 
-        FIXME: this should be documented.
+        ► **veth**
+
+        To properly create `veth` interface, one should specify
+        `peer` also, since `veth` interfaces are created in pairs::
+
+            with ip.create(ifname='v1p0', kind='veth', peer='v1p1') as i:
+                i.add_ip('10.0.0.1/24')
+                i.add_ip('10.0.0.2/24')
+
+        The code above creates two interfaces, `v1p0` and `v1p1`, and
+        adds two addresses to `v1p0`.
+
+        ► **vlan**
+
+        VLAN interfaces require additional parameters, `vlan_id` and
+        `link`, where `link` is a master interface to create VLAN on::
+
+            ip.create(ifname='v100',
+                      kind='vlan',
+                      link=ip.interfaces.eth0,
+                      vlan_id=100)
+
+            ip.create(ifname='v100',
+                      kind='vlan',
+                      link=1,
+                      vlan_id=100)
+
+        The `link` parameter should be either integer, interface id, or
+        an interface object. VLAN id must be integer.
+
+        ► **tuntap**
+
+        Possible `tuntap` keywords:
+
+            * `mode` — "tun" or "tap"
+            * `uid` — integer
+            * `gid` — integer
+            * `ifr` — dict of tuntap flags (see tuntapmsg.py)
         '''
         with self.exclusive:
             # check for existing interface
@@ -505,6 +651,7 @@ class IPDB(object):
                 del self.interfaces[ifname]
                 del self.interfaces[msg['index']]
                 del self.ipaddr[msg['index']]
+                del self.neighbors[msg['index']]
         except KeyError:
             pass
 
@@ -534,11 +681,15 @@ class IPDB(object):
             device = \
                 self.interfaces[index] = \
                 self.by_index[index] = self.interfaces[ifname]
-            if old_index in self.ipaddr:
-                self.ipaddr[index] = self.ipaddr[old_index]
+            if old_index in self.interfaces:
                 del self.interfaces[old_index]
                 del self.by_index[old_index]
+            if old_index in self.ipaddr:
+                self.ipaddr[index] = self.ipaddr[old_index]
                 del self.ipaddr[old_index]
+            if old_index in self.neighbors:
+                self.neighbors[index] = self.neighbors[old_index]
+                del self.neighbors[old_index]
         else:
             # scenario #3, interface rename
             # scenario #4, assume rename
@@ -554,6 +705,9 @@ class IPDB(object):
         if index not in self.ipaddr:
             # for interfaces, created by IPDB
             self.ipaddr[index] = IPaddrSet()
+
+        if index not in self.neighbors:
+            self.neighbors[index] = LinkedSet()
 
         device.load_netlink(msg)
 
@@ -633,6 +787,17 @@ class IPDB(object):
                 except:
                     pass
 
+    def update_neighbors(self, neighs, action='add'):
+
+        for neigh in neighs:
+            nla = neigh.get_attr('NDA_DST')
+            if nla is not None:
+                try:
+                    method = getattr(self.neighbors[neigh['ifindex']], action)
+                    method(key=nla, raw=neigh)
+                except:
+                    pass
+
     def serve_forever(self):
         '''
         Main monitoring cycle. It gets messages from the
@@ -681,6 +846,10 @@ class IPDB(object):
                         self.update_addr([msg], 'add')
                     elif msg.get('event', None) == 'RTM_DELADDR':
                         self.update_addr([msg], 'remove')
+                    elif msg.get('event', None) == 'RTM_NEWNEIGH':
+                        self.update_neighbors([msg], 'add')
+                    elif msg.get('event', None) == 'RTM_DELNEIGH':
+                        self.update_neighbors([msg], 'remove')
                     elif msg.get('event', None) == 'RTM_NEWROUTE':
                         self.update_routes([msg])
                     elif msg.get('event', None) == 'RTM_DELROUTE':

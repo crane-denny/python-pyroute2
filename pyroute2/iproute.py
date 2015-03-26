@@ -39,6 +39,18 @@ the programmer's perspective. Please read also
 `NetlinkSocket` documentation to know more about async
 mode.
 
+think about IPDB
+----------------
+
+If you plan to regularly fetch loads of objects, think
+about IPDB also. Unlike to IPRoute, IPDB does not fetch
+all the objects from OS every time you request them, but
+keeps a cache that is asynchronously updated by the netlink
+broadcasts. For a long-term running programs, that often
+retrieve info about hundreds or thousands of objects, it
+can be better to use IPDB as it will load CPU significantly
+less.
+
 classes
 -------
 '''
@@ -79,10 +91,7 @@ from pyroute2.netlink.rtnl import RTM_NEWROUTE
 from pyroute2.netlink.rtnl import RTM_GETROUTE
 from pyroute2.netlink.rtnl import RTM_DELROUTE
 from pyroute2.netlink.rtnl import RTM_SETLINK
-from pyroute2.netlink.rtnl import RTM_SETBRIDGE
-from pyroute2.netlink.rtnl import RTM_GETBRIDGE
-from pyroute2.netlink.rtnl import RTM_SETBOND
-from pyroute2.netlink.rtnl import RTM_GETBOND
+from pyroute2.netlink.rtnl import RTM_GETDHCP
 from pyroute2.netlink.rtnl import TC_H_INGRESS
 from pyroute2.netlink.rtnl import TC_H_ROOT
 from pyroute2.netlink.rtnl import rtprotos
@@ -99,8 +108,7 @@ from pyroute2.netlink.rtnl.tcmsg import get_fw_parameters
 from pyroute2.netlink.rtnl.tcmsg import tcmsg
 from pyroute2.netlink.rtnl.rtmsg import rtmsg
 from pyroute2.netlink.rtnl.ndmsg import ndmsg
-from pyroute2.netlink.rtnl.brmsg import brmsg
-from pyroute2.netlink.rtnl.bomsg import bomsg
+from pyroute2.netlink.rtnl.dhcpmsg import dhcpmsg
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
 from pyroute2.netlink.rtnl.ifaddrmsg import ifaddrmsg
 from pyroute2.netlink.rtnl import IPRSocket
@@ -117,12 +125,15 @@ def transform_handle(handle):
     return handle
 
 
-class IPRoute(IPRSocket):
+class IPRouteMixin(object):
     '''
-    You can think of this class in some way as of plain old iproute2
-    utility.
+    `IPRouteMixin` should not be instantiated by itself. It is intended
+    to be used as a mixin class that provides iproute2-like API. You
+    should use `IPRoute` or `NetNS` classes.
 
-    It is an old-style library, that provides access to rtnetlink as is.
+    All following info you can consider as IPRoute info as well.
+
+    It is an old-school API, that provides access to rtnetlink as is.
     It helps you to retrieve and change almost all the data, available
     through rtnetlink::
 
@@ -215,25 +226,27 @@ class IPRoute(IPRSocket):
         msg['family'] = family
         return self.nlm_request(msg, RTM_GETNEIGH)
 
-    def get_addr(self, family=AF_UNSPEC):
+    def get_addr(self, family=AF_UNSPEC, index=None):
         '''
-        Get all addresses.
+        Get addresses::
+            ip.get_addr()  # get all addresses
+            ip.get_addr(index=2)  # get addresses for the 2nd interface
         '''
         msg = ifaddrmsg()
         msg['family'] = family
-        return self.nlm_request(msg, RTM_GETADDR)
+        ret = self.nlm_request(msg, RTM_GETADDR)
+        if index is not None:
+            return [x for x in ret if x.get('index') == index]
+        else:
+            return ret
 
-    def get_bond(self, index, name):
-        msg = bomsg()
-        msg['index'] = index
-        msg['attrs'] = [['IFBO_IFNAME', name]]
-        return self.nlm_request(msg, RTM_GETBOND)
-
-    def get_bridge(self, index, name):
-        msg = brmsg()
-        msg['index'] = index
-        msg['attrs'] = [['IFBR_IFNAME', name]]
-        return self.nlm_request(msg, RTM_GETBRIDGE)
+    def get_dhcp(self, name, address=None):
+        msg = dhcpmsg()
+        msg['family'] = AF_INET
+        msg['attrs'] = [['DHCP_IFNAME', name]]
+        if address is not None:
+            msg['attrs'].append(['DHCP_ADDRESS', address])
+        return self.nlm_request(msg, RTM_GETDHCP)
 
     def get_rules(self, family=AF_UNSPEC):
         '''
@@ -454,35 +467,14 @@ class IPRoute(IPRSocket):
         msg['change'] = mask
 
         for key in kwarg:
-            nla = ifinfmsg.name2nla(key)
+            nla = type(msg).name2nla(key)
             if kwarg[key] is not None:
                 msg['attrs'].append([nla, kwarg[key]])
 
         return self.nlm_request(msg, msg_type=command, msg_flags=msg_flags)
 
-    def setbo(self, **kwarg):
-        command = RTM_SETBOND
-        msg = bomsg()
-
-        for key in kwarg:
-            nla = bomsg.name2nla(key)
-            if kwarg[key] is not None:
-                msg['attrs'].append([nla, kwarg[key]])
-
-        return self.nlm_request(msg, msg_type=command, msg_flags=0)
-
-    def setbr(self, **kwarg):
-        command = RTM_SETBRIDGE
-        msg = brmsg()
-
-        for key in kwarg:
-            nla = brmsg.name2nla(key)
-            if kwarg[key] is not None:
-                msg['attrs'].append([nla, kwarg[key]])
-
-        return self.nlm_request(msg, msg_type=command, msg_flags=0)
-
-    def addr(self, command, index, address, mask=24, family=None, scope=0):
+    def addr(self, command, index, address, mask=24,
+             family=None, scope=0, **kwarg):
         '''
         Address operations
 
@@ -525,11 +517,15 @@ class IPRoute(IPRSocket):
                             ['IFA_ADDRESS', address]]
         elif family == AF_INET6:
             msg['attrs'] = [['IFA_ADDRESS', address]]
-        terminate = lambda x: x['header']['type'] == NLMSG_ERROR
+        for key in kwarg:
+            nla = ifaddrmsg.name2nla(key)
+            if kwarg[key] is not None:
+                msg['attrs'].append([nla, kwarg[key]])
         return self.nlm_request(msg,
                                 msg_type=command,
                                 msg_flags=flags,
-                                terminate=terminate)
+                                terminate=lambda x: x['header']['type'] ==
+                                NLMSG_ERROR)
 
     def tc(self, command, kind, index, handle=0, **kwarg):
         '''
@@ -823,8 +819,8 @@ class IPRoute(IPRSocket):
             32006: from 10.64.75.141 fwmark 0xa lookup 15
             ...
         '''
-        if table < 0 or table > 254:
-            raise 'unsupported table number'
+        if table < 1:
+            raise ValueError('unsupported table number')
 
         commands = {'add': RTM_NEWRULE,
                     'del': RTM_DELRULE,
@@ -834,7 +830,7 @@ class IPRoute(IPRSocket):
 
         msg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
         msg = rtmsg()
-        msg['table'] = table
+        msg['table'] = table if table <= 255 else 252
         msg['family'] = family
         msg['type'] = rtypes[rtype]
         msg['scope'] = rtscopes[rtscope]
@@ -863,3 +859,14 @@ class IPRoute(IPRSocket):
         return self.nlm_request(msg, msg_type=command,
                                 msg_flags=msg_flags)
     # 8<---------------------------------------------------------------
+
+
+class IPRoute(IPRouteMixin, IPRSocket):
+    '''
+    Production class that provides iproute API over normal Netlink
+    socket.
+
+    You can think of this class in some way as of plain old iproute2
+    utility.
+    '''
+    pass
