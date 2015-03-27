@@ -1,3 +1,9 @@
+pyroute2 (0.3.5-1~bpo70+2) wheezy-backports; urgency=medium
+
+  * Fixing debian/watch file for uscan
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Fri, 27 Mar 2015 11:45:01 -0500
+
 pyroute2 (0.3.5-1~bpo70+1) wheezy-backports; urgency=medium
 
   * Update to version 0.3.5
