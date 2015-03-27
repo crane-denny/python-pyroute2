@@ -2,7 +2,7 @@ Source: pyroute2
 Maintainer: Florian Pelgrim <florian.pelgrim@craneworks.de>
 Section: python
 Priority: optional
-Build-Depends: python-all (>= 2.6.6-3), python3-all, debhelper (>= 9), dh-python
+Build-Depends: python-all (>= 2.6.6-3), debhelper (>= 9), dh-python
 Standards-Version: 3.9.6
 Homepage: https://pypi.python.org/pypi/pyroute2
 VCS-Browser: https://github.com/craneworks/python-pyroute2
@@ -18,15 +18,4 @@ Description: Python Netlink library
  it is possible.
  .
  This is the Python 2 compatible package. 
-
-Package: python3-pyroute2
-Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}
-Description: Python3 Netlink library
- Pyroute2 is a pure Python netlink and Linux network configuration
- library. It requires only Python stdlib, no 3rd party libraries.
- Later it can change, but the deps tree will remain as simple, as
- it is possible.
- .
- This is the Python 3 compatible package.
  
