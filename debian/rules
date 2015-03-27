@@ -1,8 +1,7 @@
 #!/usr/bin/make -f
 
-export PYBUILD_NAME=pyroute2
 %:
-	dh $@ --with python2 --buildsystem=pybuild
+	dh $@ --with python2
 
 override_dh_installchangelogs:
 	dh_installchangelogs CHANGELOG.md
