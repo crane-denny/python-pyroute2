@@ -1,3 +1,9 @@
+pyroute2 (0.3.5-1~bpo60+2) squeeze-backports; urgency=medium
+
+  * Fixing debian/watch file for uscan
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Fri, 27 Mar 2015 11:46:19 -0500
+
 pyroute2 (0.3.5-1~bpo60+1) squeeze-backports; urgency=medium
 
   * Rebuild for squeeze-backports.
