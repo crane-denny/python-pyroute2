@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 IPRoute module
 ==============
@@ -54,11 +55,16 @@ less.
 classes
 -------
 '''
-
+import errno
+import types
+import logging
 from socket import htons
 from socket import AF_INET
 from socket import AF_INET6
 from socket import AF_UNSPEC
+from types import FunctionType
+from types import MethodType
+from pyroute2.netlink import NetlinkError
 from pyroute2.netlink import NLMSG_ERROR
 from pyroute2.netlink import NLM_F_ATOMIC
 from pyroute2.netlink import NLM_F_ROOT
@@ -83,37 +89,50 @@ from pyroute2.netlink.rtnl import RTM_DELTFILTER
 from pyroute2.netlink.rtnl import RTM_NEWTCLASS
 from pyroute2.netlink.rtnl import RTM_GETTCLASS
 from pyroute2.netlink.rtnl import RTM_DELTCLASS
-from pyroute2.netlink.rtnl import RTM_GETNEIGH
 from pyroute2.netlink.rtnl import RTM_NEWRULE
 from pyroute2.netlink.rtnl import RTM_GETRULE
 from pyroute2.netlink.rtnl import RTM_DELRULE
 from pyroute2.netlink.rtnl import RTM_NEWROUTE
 from pyroute2.netlink.rtnl import RTM_GETROUTE
 from pyroute2.netlink.rtnl import RTM_DELROUTE
+from pyroute2.netlink.rtnl import RTM_NEWNEIGH
+from pyroute2.netlink.rtnl import RTM_GETNEIGH
+from pyroute2.netlink.rtnl import RTM_DELNEIGH
 from pyroute2.netlink.rtnl import RTM_SETLINK
-from pyroute2.netlink.rtnl import RTM_GETDHCP
+from pyroute2.netlink.rtnl import RTM_GETNEIGHTBL
 from pyroute2.netlink.rtnl import TC_H_INGRESS
 from pyroute2.netlink.rtnl import TC_H_ROOT
 from pyroute2.netlink.rtnl import rtprotos
 from pyroute2.netlink.rtnl import rtypes
 from pyroute2.netlink.rtnl import rtscopes
 from pyroute2.netlink.rtnl.req import IPLinkRequest
+from pyroute2.netlink.rtnl.tcmsg import get_codel_parameters
+from pyroute2.netlink.rtnl.tcmsg import get_fq_codel_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_htb_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_htb_class_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_tbf_parameters
+from pyroute2.netlink.rtnl.tcmsg import get_hfsc_parameters
+from pyroute2.netlink.rtnl.tcmsg import get_hfsc_class_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_sfq_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_u32_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_netem_parameters
 from pyroute2.netlink.rtnl.tcmsg import get_fw_parameters
+from pyroute2.netlink.rtnl.tcmsg import get_bpf_parameters
 from pyroute2.netlink.rtnl.tcmsg import tcmsg
 from pyroute2.netlink.rtnl.rtmsg import rtmsg
 from pyroute2.netlink.rtnl.ndmsg import ndmsg
-from pyroute2.netlink.rtnl.dhcpmsg import dhcpmsg
+from pyroute2.netlink.rtnl.ndmsg import NUD_NAMES
+from pyroute2.netlink.rtnl.ndtmsg import ndtmsg
+from pyroute2.netlink.rtnl.fibmsg import fibmsg
+from pyroute2.netlink.rtnl.fibmsg import FR_ACT_NAMES
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
 from pyroute2.netlink.rtnl.ifaddrmsg import ifaddrmsg
-from pyroute2.netlink.rtnl import IPRSocket
+from pyroute2.netlink.rtnl.iprsocket import IPRSocket
+from pyroute2.netlink.rtnl.iprsocket import RawIPRSocket
+from pyroute2.protocols import ETH_P_ALL
 
 from pyroute2.common import basestring
+from pyroute2.common import getbroadcast
 
 DEFAULT_TABLE = 254
 
@@ -139,20 +158,53 @@ class IPRouteMixin(object):
 
         from pyroute2 import IPRoute
         ipr = IPRoute()
-            # lookup interface by name
-        dev = ipr.link_lookup(ifname='tap0')[0]
-            # bring it down
-        ipr.link('set', dev, state='down')
-            # change interface MAC address and rename it
-        ipr.link('set', dev, address='00:11:22:33:44:55', ifname='vpn')
-            # add primary IP address
-        ipr.addr('add', dev, address='10.0.0.1', mask=24)
-            # add secondary IP address
-        ipr.addr('add', dev, address='10.0.0.2', mask=24)
-            # bring it up
-        ipr.link('set', dev, state='up')
-
+        # create an interface
+        ipr.link_create(ifname='brx', kind='bridge')
+        # lookup the index
+        dev = ipr.link_lookup(ifname='brx')[0]
+        # bring it down
+        ipr.link('set', index=dev, state='down')
+        # change the interface MAC address and rename it just for fun
+        ipr.link('set', index=dev,
+                 address='00:11:22:33:44:55',
+                 ifname='br-ctrl')
+        # add primary IP address
+        ipr.addr('add', index=dev,
+                 address='10.0.0.1', mask=24,
+                 broadcast='10.0.0.255')
+        # add secondary IP address
+        ipr.addr('add', index=dev,
+                 address='10.0.0.2', mask=24,
+                 broadcast='10.0.0.255')
+        # bring it up
+        ipr.link('set', index=dev, state='up')
     '''
+
+    def _match(self, match, msgs):
+        # filtered results
+        f_ret = []
+        for msg in msgs:
+            if isinstance(match, (FunctionType, MethodType)):
+                if match(msg):
+                    f_ret.append(msg)
+            elif isinstance(match, dict):
+                matches = []
+                for key in match:
+                    KEY = msg.name2nla(key)
+                    if isinstance(match[key], types.FunctionType):
+                        if msg.get(key) is not None:
+                            matches.append(match[key](msg.get(key)))
+                        elif msg.get_attr(KEY) is not None:
+                            matches.append(match[key](msg.get_attr(KEY)))
+                        else:
+                            matches.append(False)
+                    else:
+                        matches.append(msg.get(key) == match[key] or
+                                       msg.get_attr(KEY) ==
+                                       match[key])
+                if all(matches):
+                    f_ret.append(msg)
+        return f_ret
 
     # 8<---------------------------------------------------------------
     #
@@ -220,49 +272,96 @@ class IPRouteMixin(object):
 
     def get_neighbors(self, family=AF_UNSPEC):
         '''
-        Retrieve ARP cache records.
+        Alias of `get_neighbours()`, deprecated.
         '''
-        msg = ndmsg()
+        logging.warning('The `get_neighbors()` call is deprecated')
+        logging.warning('Use `get_neighbours() instead')
+        return self.get_neighbours(family)
+
+    def get_neighbours(self, family=AF_UNSPEC, match=None, **kwarg):
+        '''
+        Dump ARP cache records.
+
+        The `family` keyword sets the family for the request:
+        e.g. `AF_INET` or `AF_INET6` for arp cache, `AF_BRIDGE`
+        for fdb.
+
+        If other keyword arguments not empty, they are used as
+        filter. Also, one can explicitly set filter as a function
+        with the `match` parameter.
+
+        Examples::
+
+            # get neighbours on the 3rd link:
+            ip.get_neighbours(ifindex=3)
+
+            # get a particular record by dst:
+            ip.get_neighbours(dst='172.16.0.1')
+
+            # get fdb records:
+            ip.get_neighbours(AF_BRIDGE)
+
+            # and filter them by a function:
+            ip.get_neighbours(AF_BRIDGE, match=lambda x: x['state'] == 2)
+        '''
+        return self.neigh((RTM_GETNEIGH, NLM_F_REQUEST | NLM_F_DUMP),
+                          family=family,
+                          match=match or kwarg)
+
+    def get_ntables(self, family=AF_UNSPEC):
+        '''
+        Get neighbour tables
+        '''
+        msg = ndtmsg()
         msg['family'] = family
-        return self.nlm_request(msg, RTM_GETNEIGH)
+        return self.nlm_request(msg, RTM_GETNEIGHTBL)
 
-    def get_addr(self, family=AF_UNSPEC, index=None):
+    def get_addr(self, family=AF_UNSPEC, match=None, **kwarg):
         '''
-        Get addresses::
-            ip.get_addr()  # get all addresses
-            ip.get_addr(index=2)  # get addresses for the 2nd interface
-        '''
-        msg = ifaddrmsg()
-        msg['family'] = family
-        ret = self.nlm_request(msg, RTM_GETADDR)
-        if index is not None:
-            return [x for x in ret if x.get('index') == index]
-        else:
-            return ret
+        Dump addresses.
 
-    def get_dhcp(self, name, address=None):
-        msg = dhcpmsg()
-        msg['family'] = AF_INET
-        msg['attrs'] = [['DHCP_IFNAME', name]]
-        if address is not None:
-            msg['attrs'].append(['DHCP_ADDRESS', address])
-        return self.nlm_request(msg, RTM_GETDHCP)
+        If family is not specified, both AF_INET and AF_INET6 addresses
+        will be dumped::
 
-    def get_rules(self, family=AF_UNSPEC):
+            # get all addresses
+            ip.get_addr()
+
+        It is possible to apply filters on the results::
+
+            # get addresses for the 2nd interface
+            ip.get_addr(index=2)
+
+            # get addresses with IFA_LABEL == 'eth0'
+            ip.get_addr(label='eth0')
+
+            # get all the subnet addresses on the interface, identified
+            # by broadcast address (should be explicitly specified upon
+            # creation)
+            ip.get_addr(index=2, broadcast='192.168.1.255')
+
+        A custom predicate can be used as a filter::
+
+            ip.get_addr(match=lambda x: x['index'] == 1)
         '''
-        Get all rules.
-        You can specify inet family, by default return rules for all families.
+        return self.addr((RTM_GETADDR, NLM_F_REQUEST | NLM_F_DUMP),
+                         family=family,
+                         match=match or kwarg)
+
+    def get_rules(self, family=AF_UNSPEC, match=None, **kwarg):
+        '''
+        Get all rules. By default return all rules. To explicitly
+        request the IPv4 rules use `family=AF_INET`.
 
         Example::
             ip.get_rules() # get all the rules for all families
-            ip.get_routes(family=AF_INET6)  # get only IPv6 rules
+            ip.get_rules(family=AF_INET6)  # get only IPv6 rules
         '''
-        msg = ndmsg()
-        msg['family'] = family
-        msg_flags = NLM_F_REQUEST | NLM_F_ROOT | NLM_F_ATOMIC
-        return self.nlm_request(msg, RTM_GETRULE, msg_flags)
+        return self.rule((RTM_GETRULE,
+                          NLM_F_REQUEST | NLM_F_ROOT | NLM_F_ATOMIC),
+                         family=family,
+                         match=match or kwarg)
 
-    def get_routes(self, family=AF_UNSPEC, **kwarg):
+    def get_routes(self, family=AF_UNSPEC, match=None, **kwarg):
         '''
         Get all routes. You can specify the table. There
         are 255 routing classes (tables), and the kernel
@@ -277,29 +376,18 @@ class IPRouteMixin(object):
         '''
 
         msg_flags = NLM_F_DUMP | NLM_F_REQUEST
-        msg = rtmsg()
-        msg['family'] = family
-        # you can specify the table here, but the kernel
-        # will ignore this setting
-        table = kwarg.get('table', DEFAULT_TABLE)
-        msg['table'] = table if table <= 255 else 252
+        nkw = {}
 
-        # get a particular route
-        if kwarg.get('dst', None) is not None:
+        # get a particular route?
+        if isinstance(kwarg.get('dst'), basestring):
             dlen = 32 if family == AF_INET else \
                 128 if family == AF_INET6 else 0
             msg_flags = NLM_F_REQUEST
-            msg['dst_len'] = kwarg.get('dst_len', dlen)
+            nkw['dst'] = kwarg.pop('dst')
+            nkw['dst_len'] = kwarg.pop('dst_len', dlen)
 
-        for key in kwarg:
-            nla = rtmsg.name2nla(key)
-            if kwarg[key] is not None:
-                msg['attrs'].append([nla, kwarg[key]])
-
-        routes = self.nlm_request(msg, RTM_GETROUTE, msg_flags)
-        return [x for x in routes
-                if x.get_attr('RTA_TABLE') == table or
-                kwarg.get('table', None) is None]
+        return self.route((RTM_GETROUTE, msg_flags),
+                          family=family, match=match or kwarg, **nkw)
     # 8<---------------------------------------------------------------
 
     # 8<---------------------------------------------------------------
@@ -399,21 +487,127 @@ class IPRouteMixin(object):
                                         msg_type=RTM_DELROUTE,
                                         msg_flags=flags))
         return ret
+
+    def flush_addr(self, *argv, **kwarg):
+        '''
+        Flush addresses.
+
+        Examples::
+
+            # flush all addresses on the interface with index 2:
+            ipr.flush_addr(index=2)
+
+            # flush all addresses with IFA_LABEL='eth0':
+            ipr.flush_addr(label='eth0')
+        '''
+        flags = NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL | NLM_F_REQUEST
+        ret = []
+        for addr in self.get_addr(*argv, **kwarg):
+            try:
+                ret.append(self.nlm_request(addr,
+                                            msg_type=RTM_DELADDR,
+                                            msg_flags=flags))
+            except NetlinkError as e:
+                if e.code != errno.EADDRNOTAVAIL:
+                    raise
+        return ret
+
+    def flush_rules(self, *argv, **kwarg):
+        '''
+        Flush rules. Please keep in mind, that by default the function
+        operates on **all** rules of **all** families. To work only on
+        IPv4 rules, one should explicitly specify `family=AF_INET`.
+
+        Examples::
+
+            # flush all IPv4 rule with priorities above 5 and below 32000
+            ipr.flush_rules(family=AF_INET, priority=lambda x: 5 < x < 32000)
+
+            # flush all IPv6 rules that point to table 250:
+            ipr.flush_rules(family=socket.AF_INET6, table=250)
+        '''
+        flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
+        ret = []
+        for rule in self.get_rules(*argv, **kwarg):
+            ret.append(self.nlm_request(rule,
+                                        msg_type=RTM_DELRULE,
+                                        msg_flags=flags))
+        return ret
     # 8<---------------------------------------------------------------
 
     # 8<---------------------------------------------------------------
     #
     # General low-level configuration methods
     #
+    def neigh(self, command, match=None, **kwarg):
+        '''
+        Neighbours operations, same as `ip neigh` or `bridge fdb`
+
+        * command -- add, delete, change, replace
+        * match -- match rules
+        * ifindex -- device index
+        * family -- family: AF_INET, AF_INET6, AF_BRIDGE
+        * \*\*kwarg -- msg fields and NLA
+
+        Example::
+
+            pass
+        '''
+        # FIXME: this is only a draft; all definitions should
+        # be generalized
+
+        flags_base = NLM_F_REQUEST | NLM_F_ACK
+        flags_make = flags_base | NLM_F_CREATE | NLM_F_EXCL
+        flags_change = flags_base | NLM_F_REPLACE
+        flags_replace = flags_change | NLM_F_CREATE
+
+        commands = {'add': (RTM_NEWNEIGH, flags_make),
+                    'set': (RTM_NEWNEIGH, flags_replace),
+                    'replace': (RTM_NEWNEIGH, flags_replace),
+                    'change': (RTM_NEWNEIGH, flags_change),
+                    'del': (RTM_DELNEIGH, flags_make),
+                    'remove': (RTM_DELNEIGH, flags_make),
+                    'delete': (RTM_DELNEIGH, flags_make)}
+
+        (command, flags) = commands.get(command, command)
+        msg = ndmsg()
+        for field in msg.fields:
+            msg[field[0]] = kwarg.pop(field[0], 0)
+        msg['family'] = msg['family'] or AF_INET
+        msg['attrs'] = []
+        # fix nud kwarg
+        state = kwarg.pop('state', kwarg.pop('nud', 0))
+        if isinstance(state, basestring):
+            # parse state string
+            states = state.split(',')
+            state = 0
+            for s in states:
+                s = s.upper()
+                if not s.startswith('NUD_'):
+                    s = 'NUD_' + s
+                state |= NUD_NAMES[s]
+        msg['state'] = state
+
+        for key in kwarg:
+            nla = ndmsg.name2nla(key)
+            if kwarg[key] is not None:
+                msg['attrs'].append([nla, kwarg[key]])
+
+        ret = self.nlm_request(msg, msg_type=command, msg_flags=flags)
+        if match is not None:
+            return self._match(match, ret)
+        else:
+            return ret
+
     def link(self, command, **kwarg):
         '''
         Link operations.
 
         * command -- set, add or delete
         * index -- device index
-        * \*\*kwarg -- keywords, NLA
+        * \*\*kwarg -- keywords, NLA (see ifinfmsg.py)
 
-        Example::
+        Examples::
 
             x = 62  # interface index
             ip.link("set", index=x, state="down")
@@ -440,6 +634,20 @@ class IPRouteMixin(object):
         You can also delete interface with::
 
             ip.link("delete", index=x)
+
+        It is possible to manage bridge and bond attributes as well,
+        but it will require to use the `IPLinkRequest()`::
+
+            from pyroute2 import IPLinkRequest
+
+            idx = ip.link_lookup(ifname="br0")[0]
+            ip.link("set", **IPLinkRequest({"index": idx,
+                                            "kind": "bridge",
+                                            "stp_state": 1}))
+
+        Please notice, that the `kind` attribute in that case is
+        required, since `IPLinkRequest()` needs the `kind` to
+        build the NLA structure correctly.
         '''
 
         commands = {'set': RTM_SETLINK,
@@ -450,9 +658,11 @@ class IPRouteMixin(object):
         command = commands.get(command, command)
 
         msg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
+        if not isinstance(kwarg['index'], int):
+            raise ValueError('index should be int')
         msg = ifinfmsg()
         # index is required
-        msg['index'] = kwarg.get('index')
+        msg['index'] = kwarg['index']
 
         flags = kwarg.pop('flags', 0) or 0
         mask = kwarg.pop('mask', 0) or kwarg.pop('change', 0) or 0
@@ -471,10 +681,34 @@ class IPRouteMixin(object):
             if kwarg[key] is not None:
                 msg['attrs'].append([nla, kwarg[key]])
 
-        return self.nlm_request(msg, msg_type=command, msg_flags=msg_flags)
+        def update_caps(e):
+            # update capabilities, if needed
+            if e.code == errno.EOPNOTSUPP:
+                kind = None
+                li = msg.get_attr('IFLA_LINKINFO')
+                if li:
+                    attrs = li.get('attrs', [])
+                    for attr in attrs:
+                        if attr[0] == 'IFLA_INFO_KIND':
+                            kind = attr[1]
+                if kind == 'bond' and self.capabilities['create_bond']:
+                    self.capabilities['create_bond'] = False
+                    return
+                if kind == 'bridge' and self.capabilities['create_bridge']:
+                    self.capabilities['create_bridge'] = False
+                    return
 
-    def addr(self, command, index, address, mask=24,
-             family=None, scope=0, **kwarg):
+            # let the exception to be forwarded
+            return True
+
+        return self.nlm_request(msg,
+                                msg_type=command,
+                                msg_flags=msg_flags,
+                                exception_catch=NetlinkError,
+                                exception_handler=update_caps)
+
+    def addr(self, command, index=None, address=None, mask=None,
+             family=None, scope=None, match=None, **kwarg):
         '''
         Address operations
 
@@ -484,48 +718,97 @@ class IPRouteMixin(object):
         * mask -- address mask
         * family -- socket.AF_INET for IPv4 or socket.AF_INET6 for IPv6
         * scope -- the address scope, see /etc/iproute2/rt_scopes
+        * \*\*kwarg -- any ifaddrmsg field or NLA
+
+        Later the method signature will be changed to::
+
+            def addr(self, command, match=None, **kwarg):
+                # the method body
+
+        So only keyword arguments (except of the command) will be accepted.
+        The reason for this change is an unification of API.
 
         Example::
 
-            index = 62
-            ip.addr("add", index, address="10.0.0.1", mask=24)
-            ip.addr("add", index, address="10.0.0.2", mask=24)
+            idx = 62
+            ip.addr('add', index=idx, address='10.0.0.1', mask=24)
+            ip.addr('add', index=idx, address='10.0.0.2', mask=24)
+
+        With more NLAs::
+
+            # explicitly set broadcast address
+            ip.addr('add', index=idx,
+                    address='10.0.0.3',
+                    broadcast='10.0.0.255',
+                    prefixlen=24)
+
+            # make the secondary address visible to ifconfig: add label
+            ip.addr('add', index=idx,
+                    address='10.0.0.4',
+                    broadcast='10.0.0.255',
+                    prefixlen=24,
+                    label='eth0:1')
         '''
 
-        commands = {'add': RTM_NEWADDR,
-                    'del': RTM_DELADDR,
-                    'remove': RTM_DELADDR,
-                    'delete': RTM_DELADDR}
-        command = commands.get(command, command)
+        flags_create = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
+        commands = {'add': (RTM_NEWADDR, flags_create),
+                    'del': (RTM_DELADDR, flags_create),
+                    'remove': (RTM_DELADDR, flags_create),
+                    'delete': (RTM_DELADDR, flags_create)}
+        (command, flags) = commands.get(command, command)
 
-        flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
+        # fetch args
+        index = index or kwarg.pop('index', 0)
+        family = family or kwarg.pop('family', None)
+        prefixlen = mask or kwarg.pop('mask', 0) or kwarg.pop('prefixlen', 0)
+        scope = scope or kwarg.pop('scope', 0)
+
+        # move address to kwarg
+        # FIXME: add deprecation notice
+        if address:
+            kwarg['address'] = address
 
         # try to guess family, if it is not forced
-        if family is None:
+        if kwarg.get('address') and family is None:
             if address.find(":") > -1:
                 family = AF_INET6
+                mask = mask or 128
             else:
                 family = AF_INET
+                mask = mask or 24
 
+        # setup the message
         msg = ifaddrmsg()
         msg['index'] = index
-        msg['family'] = family
-        msg['prefixlen'] = mask
+        msg['family'] = family or 0
+        msg['prefixlen'] = prefixlen
         msg['scope'] = scope
-        if family == AF_INET:
-            msg['attrs'] = [['IFA_LOCAL', address],
-                            ['IFA_ADDRESS', address]]
-        elif family == AF_INET6:
-            msg['attrs'] = [['IFA_ADDRESS', address]]
+
+        # inject IFA_LOCAL, if family is AF_INET and IFA_LOCAL is not set
+        if family == AF_INET and \
+                kwarg.get('address') and \
+                kwarg.get('local') is None:
+            kwarg['local'] = kwarg['address']
+
+        # patch broadcast, if needed
+        if kwarg.get('broadcast') is True:
+            kwarg['broadcast'] = getbroadcast(address, mask, family)
+
+        # work on NLA
         for key in kwarg:
             nla = ifaddrmsg.name2nla(key)
             if kwarg[key] is not None:
                 msg['attrs'].append([nla, kwarg[key]])
-        return self.nlm_request(msg,
-                                msg_type=command,
-                                msg_flags=flags,
-                                terminate=lambda x: x['header']['type'] ==
-                                NLMSG_ERROR)
+
+        ret = self.nlm_request(msg,
+                               msg_type=command,
+                               msg_flags=flags,
+                               terminate=lambda x: x['header']['type'] ==
+                               NLMSG_ERROR)
+        if match:
+            return self._match(match, ret)
+        else:
+            return ret
 
     def tc(self, command, kind, index, handle=0, **kwarg):
         '''
@@ -547,6 +830,12 @@ class IPRouteMixin(object):
             ff:0   ->   0xff0000
             ffff:1 -> 0xffff0001
 
+        Target notice: if your target is a class/qdisc that applies an
+        algorithm that can only apply to upstream traffic profile, but your
+        keys variable explicitly references a match that is only relevant for
+        upstream traffic, the kernel will reject the filter.  Unless you're
+        dealing with devices like IMQs
+
         For pyroute2 tc() you can use both forms: integer like 0xffff0000
         or string like 'ffff:0000'. By default, handle is 0, so you can add
         simple classless queues w/o need to specify handle. Ingress queue
@@ -562,7 +851,8 @@ class IPRouteMixin(object):
         module constants, `RTM_NEWQDISC`, `RTM_DELQDISC` and so on::
 
             ip = IPRoute()
-            ip.tc(RTM_NEWQDISC, "sfq", 1)
+            flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
+            ip.tc((RTM_NEWQDISC, flags), "sfq", 1)
 
         More complex example with htb qdisc, lets assume eth0 == 2::
 
@@ -618,18 +908,96 @@ class IPRouteMixin(object):
                   protocol=socket.AF_INET,
                   target=0x10020,
                   keys=["0x5/0xf+0", "0x10/0xff+33"])
-        '''
 
-        commands = {'add': RTM_NEWQDISC,
-                    'del': RTM_DELQDISC,
-                    'remove': RTM_DELQDISC,
-                    'delete': RTM_DELQDISC,
-                    'add-class': RTM_NEWTCLASS,
-                    'del-class': RTM_DELTCLASS,
-                    'add-filter': RTM_NEWTFILTER,
-                    'del-filter': RTM_DELTFILTER}
-        command = commands.get(command, command)
-        flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
+        Filters can also take an `action` argument, which affects the packet
+        behavior when the filter matches. Currently the gact, bpf, and police
+        action types are supported, and can be attached to the u32 and bpf
+        filter types::
+
+            # An action can be a simple string, which translates to a gact type
+            action = "drop"
+
+            # Or it can be an explicit type (these are equivalent)
+            action = dict(kind="gact", action="drop")
+
+            # There can also be a chain of actions, which depend on the return
+            # value of the previous action.
+            action = [
+                dict(kind="bpf", fd=fd, name=name, action="ok"),
+                dict(kind="police", rate="10kbit", burst=10240, limit=0),
+                dict(kind="gact", action="ok"),
+            ]
+
+            # Add the action to a u32 match-all filter
+            ip.tc("add", "htb", eth0, 0x10000, default=0x200000)
+            ip.tc("add-filter", "u32", eth0,
+                  parent=0x10000,
+                  prio=10,
+                  protocol=protocols.ETH_P_ALL,
+                  target=0x10020,
+                  keys=["0x0/0x0+0"],
+                  action=action)
+
+            # Add two more filters: One to send packets with a src address of
+            # 192.168.0.1/32 into 1:10 and the second to send packets  with a
+            # dst address of 192.168.0.0/24 into 1:20
+            ip.tc("add-filter", "u32", eth0,
+                parent=0x10000,
+                prio=10,
+                protocol=socket.AF_INET,
+                target=0x10010,
+                keys=["0xc0a80001/0xffffffff+12"])
+                # 0xc0a800010 = 192.168.0.1
+                # 0xffffffff = 255.255.255.255 (/32)
+                # 12 = Source network field bit offset
+
+            ip.tc("add-filter", "u32", eth0,
+                parent=0x10000,
+                prio=10,
+                protocol=socket.AF_INET,
+                target=0x10020,
+                keys=["0xc0a80000/0xffffff00+16"])
+                # 0xc0a80000 = 192.168.0.0
+                # 0xffffff00 = 255.255.255.0 (/24)
+                # 16 = Destination network field bit offset
+
+        Simple HFSC example::
+
+            eth0 = ip.get_links(ifname="eth0")[0]
+            ip.tc("add", "hfsc", eth0,
+                  handle="1:",
+                  default="1:1")
+            ip.tc("add-class", "hfsc", eth0,
+                  handle="1:1",
+                  parent="1:0"
+                  rsc={"m2": "5mbit"})
+
+        HFSC curve nla types:
+
+        * `rsc`: real-time curve
+        * `fsc`: link-share curve
+        * `usc`: upper-limit curve
+        '''
+        flags_base = NLM_F_REQUEST | NLM_F_ACK
+        flags_make = flags_base | NLM_F_CREATE | NLM_F_EXCL
+        flags_change = flags_base | NLM_F_REPLACE
+        flags_replace = flags_change | NLM_F_CREATE
+
+        commands = {'add': (RTM_NEWQDISC, flags_make),
+                    'del': (RTM_DELQDISC, flags_make),
+                    'remove': (RTM_DELQDISC, flags_make),
+                    'delete': (RTM_DELQDISC, flags_make),
+                    'add-class': (RTM_NEWTCLASS, flags_make),
+                    'del-class': (RTM_DELTCLASS, flags_make),
+                    'change-class': (RTM_NEWTCLASS, flags_change),
+                    'replace-class': (RTM_NEWTCLASS, flags_replace),
+                    'add-filter': (RTM_NEWTFILTER, flags_make),
+                    'del-filter': (RTM_DELTFILTER, flags_make),
+                    'change-filter': (RTM_NEWTFILTER, flags_change),
+                    'replace-filter': (RTM_NEWTFILTER, flags_replace)}
+        if isinstance(command, int):
+            command = (command, flags_make)
+        command, flags = commands.get(command, command)
         msg = tcmsg()
         # transform handle, parent and target, if needed:
         handle = transform_handle(handle)
@@ -646,6 +1014,23 @@ class IPRouteMixin(object):
             msg['parent'] = TC_H_ROOT
             if kwarg:
                 opts = get_tbf_parameters(kwarg)
+        elif kind == 'hfsc':
+            msg['parent'] = kwarg.get('parent', TC_H_ROOT)
+            if kwarg:
+                if command in (RTM_NEWQDISC, RTM_DELQDISC):
+                    if 'default' in kwarg:
+                        kwarg['default'] &= 0xffff
+                    opts = get_hfsc_parameters(kwarg)
+                elif command in (RTM_NEWTCLASS, RTM_DELTCLASS):
+                    opts = get_hfsc_class_parameters(kwarg)
+        elif kind == 'codel':
+            msg['parent'] = kwarg.get('parent', TC_H_ROOT)
+            if kwarg:
+                opts = get_codel_parameters(kwarg)
+        elif kind == 'fq_codel':
+            msg['parent'] = kwarg.get('parent', TC_H_ROOT)
+            if kwarg:
+                opts = get_fq_codel_parameters(kwarg)
         elif kind == 'htb':
             msg['parent'] = kwarg.get('parent', TC_H_ROOT)
             if kwarg:
@@ -673,6 +1058,12 @@ class IPRouteMixin(object):
                 ((kwarg.get('prio', 0) << 16) & 0xffff0000)
             if kwarg:
                 opts = get_fw_parameters(kwarg)
+        elif kind == 'bpf':
+            msg['parent'] = kwarg.get('parent', TC_H_ROOT)
+            msg['info'] = htons(kwarg.get('protocol', ETH_P_ALL) & 0xffff) |\
+                ((kwarg.get('prio', 0) << 16) & 0xffff0000)
+            if kwarg:
+                opts = get_bpf_parameters(kwarg)
         else:
             msg['parent'] = kwarg.get('parent', TC_H_ROOT)
 
@@ -682,21 +1073,16 @@ class IPRouteMixin(object):
             msg['attrs'].append(['TCA_OPTIONS', opts])
         return self.nlm_request(msg, msg_type=command, msg_flags=flags)
 
-    def route(self, command,
-              rtype='RTN_UNICAST',
-              rtproto='RTPROT_STATIC',
-              rtscope='RT_SCOPE_UNIVERSE',
-              **kwarg):
+    def route(self, command, **kwarg):
         '''
-        Route operations
+        Route operations.
 
-        * command -- add, delete
-        * prefix -- route prefix
-        * mask -- route prefix mask
+        * command -- add, delete, change, replace
         * rtype -- route type (default: "RTN_UNICAST")
         * rtproto -- routing protocol (default: "RTPROT_STATIC")
         * rtscope -- routing scope (default: "RT_SCOPE_UNIVERSE")
         * family -- socket.AF_INET (default) or socket.AF_INET6
+        * mask -- route prefix mask
 
         `pyroute2/netlink/rtnl/rtmsg.py` rtmsg.nla_map:
 
@@ -713,6 +1099,42 @@ class IPRouteMixin(object):
         Example::
 
             ip.route("add", dst="10.0.0.0", mask=24, gateway="192.168.0.1")
+
+        Commands `change` and `replace` have the same meanings, as
+        in ip-route(8): `change` modifies only existing route, while
+        `replace` creates a new one, if there is no such route yet.
+
+        It is possible to set also route metrics. There are two ways
+        to do so. The first is to use 'raw' NLA notation::
+
+            ip.route("add",
+                     dst="10.0.0.0",
+                     mask=24,
+                     gateway="192.168.0.1",
+                     metrics={"attrs": [["RTAX_MTU", 1400],
+                                        ["RTAX_HOPLIMIT", 16]]})
+
+        The second way is to use `IPRouteRequest` helper::
+
+            from pyroute2.netlink.rtnl.req import IPRouteRequest
+            ...
+            ip.route("add", **IPRouteRequest({"dst": "10.0.0.0/24",
+                                              "gateway": "192.168.0.1",
+                                              "metrics": {"mtu": 1400,
+                                                          "hoplimit": 16}}))
+
+        The `IPRouteRequest` helper is useful also to manage
+        mulptipath routes::
+
+            from pyroute2.netlink.rtnl.req import IPRouteRequest
+            ...
+            request = {"dst": "10.0.0.0/24",
+                       "multipath": [{"gateway": "192.168.0.1",
+                                      "hops": 2},
+                                     {"gateway": "192.168.0.2",
+                                      "hops": 1},
+                                     {"gateway": "192.168.0.3"}]}
+            ip.route("add", **IPRouteRequest(request))
         '''
 
         # 8<----------------------------------------------------
@@ -720,10 +1142,13 @@ class IPRouteMixin(object):
         # flags should be moved to some more general place
         flags_base = NLM_F_REQUEST | NLM_F_ACK
         flags_make = flags_base | NLM_F_CREATE | NLM_F_EXCL
-        flags_replace = flags_base | NLM_F_REPLACE
+        flags_change = flags_base | NLM_F_REPLACE
+        flags_replace = flags_change | NLM_F_CREATE
         # 8<----------------------------------------------------
         commands = {'add': (RTM_NEWROUTE, flags_make),
                     'set': (RTM_NEWROUTE, flags_replace),
+                    'replace': (RTM_NEWROUTE, flags_replace),
+                    'change': (RTM_NEWROUTE, flags_change),
                     'del': (RTM_DELROUTE, flags_make),
                     'remove': (RTM_DELROUTE, flags_make),
                     'delete': (RTM_DELROUTE, flags_make)}
@@ -734,130 +1159,164 @@ class IPRouteMixin(object):
         # also for nla_attr:
         table = kwarg.get('table', 254)
         msg['table'] = table if table <= 255 else 252
-        msg['family'] = kwarg.get('family', AF_INET)
-        msg['proto'] = rtprotos[rtproto]
-        msg['type'] = rtypes[rtype]
-        msg['scope'] = rtscopes[rtscope]
-        msg['dst_len'] = kwarg.get('dst_len', None) or \
-            kwarg.get('mask', 0)
+        msg['family'] = kwarg.pop('family', AF_INET)
+        msg['proto'] = rtprotos[kwarg.pop('rtproto', 'RTPROT_STATIC')]
+        msg['type'] = rtypes[kwarg.pop('rtype', 'RTN_UNICAST')]
+        msg['scope'] = rtscopes[kwarg.pop('rtscope', 'RT_SCOPE_UNIVERSE')]
+        msg['dst_len'] = kwarg.pop('dst_len', None) or kwarg.pop('mask', 0)
+        msg['src_len'] = kwarg.pop('src_len', 0)
+        msg['tos'] = kwarg.pop('tos', 0)
+        msg['flags'] = kwarg.pop('flags', 0)
         msg['attrs'] = []
         # FIXME
         # deprecated "prefix" support:
         if 'prefix' in kwarg:
+            logging.warning('`prefix` argument is deprecated, use `dst`')
             kwarg['dst'] = kwarg['prefix']
 
         for key in kwarg:
             nla = rtmsg.name2nla(key)
             if kwarg[key] is not None:
                 msg['attrs'].append([nla, kwarg[key]])
+                # fix IP family, if needed
+                if msg['family'] == AF_UNSPEC:
+                    if key in ('dst', 'src', 'gateway', 'prefsrc', 'newdst') \
+                            and isinstance(kwarg[key], basestring):
+                        msg['family'] = AF_INET6 if kwarg[key].find(':') >= 0 \
+                            else AF_INET
+                    elif key == 'multipath' and len(kwarg[key]) > 0:
+                        hop = kwarg[key][0]
+                        attrs = hop.get('attrs', [])
+                        for attr in attrs:
+                            if attr[0] == 'RTA_GATEWAY':
+                                msg['family'] = AF_INET6 if \
+                                    attr[1].find(':') >= 0 else AF_INET
+                                break
 
-        return self.nlm_request(msg, msg_type=command,
-                                msg_flags=flags)
+        ret = self.nlm_request(msg, msg_type=command, msg_flags=flags)
+        if 'match' in kwarg:
+            return self._match(kwarg['match'], ret)
+        else:
+            return ret
 
-    def rule(self, command, table, priority=32000, rtype='RTN_UNICAST',
-             rtscope='RT_SCOPE_UNIVERSE', family=AF_INET, src=None,
-             src_len=None, dst=None, dst_len=None, fwmark=None):
+    def rule(self, command, *argv, **kwarg):
         '''
         Rule operations
 
-        * command  - add, delete
-        * table    - 0 < table id < 253
-        * priority - 0 < rule's priority < 32766
-        * rtype    - type of rule, default 'RTN_UNICAST'
-        * rtscope  - routing scope, default RT_SCOPE_UNIVERSE
-                     (RT_SCOPE_UNIVERSE|RT_SCOPE_SITE|\
-                      RT_SCOPE_LINK|RT_SCOPE_HOST|RT_SCOPE_NOWHERE)
-        * family   - rule's family (socket.AF_INET (default) or
-                     socket.AF_INET6)
-        * src      - IP source for Source Based (Policy Based) routing's rule
-        * dst      - IP for Destination Based (Policy Based) routing's rule
-        * src_len  - Mask for Source Based (Policy Based) routing's rule
-        * dst_len  - Mask for Destination Based (Policy Based) routing's rule
+            - command — add, delete
+            - table — 0 < table id < 253
+            - priority — 0 < rule's priority < 32766
+            - action — type of rule, default 'FR_ACT_NOP' (see fibmsg.py)
+            - rtscope — routing scope, default RT_SCOPE_UNIVERSE
+                `(RT_SCOPE_UNIVERSE|RT_SCOPE_SITE|\
+                RT_SCOPE_LINK|RT_SCOPE_HOST|RT_SCOPE_NOWHERE)`
+            - family — rule's family (socket.AF_INET (default) or
+                socket.AF_INET6)
+            - src — IP source for Source Based (Policy Based) routing's rule
+            - dst — IP for Destination Based (Policy Based) routing's rule
+            - src_len — Mask for Source Based (Policy Based) routing's rule
+            - dst_len — Mask for Destination Based (Policy Based) routing's
+                rule
+            - iifname — Input interface for Interface Based (Policy Based)
+                routing's rule
+            - oifname — Output interface for Interface Based (Policy Based)
+                routing's rule
 
-        Example::
-            ip.rule('add', 10, 32000)
+        All packets route via table 10::
 
-        Will create::
-            #ip ru sh
-            ...
-            32000: from all lookup 10
-            ....
+            # 32000: from all lookup 10
+            # ...
+            ip.rule('add', table=10, priority=32000)
 
-        Example::
-            iproute.rule('add', 11, 32001, 'RTN_UNREACHABLE')
+        Default action::
 
-        Will create::
-            #ip ru sh
-            ...
-            32001: from all lookup 11 unreachable
-            ....
+            # 32001: from all lookup 11 unreachable
+            # ...
+            iproute.rule('add',
+                         table=11,
+                         priority=32001,
+                         action='FR_ACT_UNREACHABLE')
 
-        Example::
-            iproute.rule('add', 14, 32004, src='10.64.75.141')
+        Use source address to choose a routing table::
 
-        Will create::
-            #ip ru sh
-            ...
-            32004: from 10.64.75.141 lookup 14
-            ...
+            # 32004: from 10.64.75.141 lookup 14
+            # ...
+            iproute.rule('add',
+                         table=14,
+                         priority=32004,
+                         src='10.64.75.141')
 
-        Example::
-            iproute.rule('add', 15, 32005, dst='10.64.75.141', dst_len=24)
+        Use dst address to choose a routing table::
 
-        Will create::
-            #ip ru sh
-            ...
-            32005: from 10.64.75.141/24 lookup 15
-            ...
+            # 32005: from 10.64.75.141/24 lookup 15
+            # ...
+            iproute.rule('add',
+                         table=15,
+                         priority=32005,
+                         dst='10.64.75.141',
+                         dst_len=24)
 
-        Example::
-            iproute.rule('add', 15, 32006, dst='10.64.75.141', fwmark=10)
+        Match fwmark::
 
-        Will create::
-            #ip ru sh
-            ...
-            32006: from 10.64.75.141 fwmark 0xa lookup 15
-            ...
+            # 32006: from 10.64.75.141 fwmark 0xa lookup 15
+            # ...
+            iproute.rule('add',
+                         table=15,
+                         priority=32006,
+                         dst='10.64.75.141',
+                         fwmark=10)
         '''
-        if table < 1:
-            raise ValueError('unsupported table number')
+        flags_base = NLM_F_REQUEST | NLM_F_ACK
+        flags_make = flags_base | NLM_F_CREATE | NLM_F_EXCL
+        flags_change = flags_base | NLM_F_REPLACE
+        flags_replace = flags_change | NLM_F_CREATE
 
-        commands = {'add': RTM_NEWRULE,
-                    'del': RTM_DELRULE,
-                    'remove': RTM_DELRULE,
-                    'delete': RTM_DELRULE}
-        command = commands.get(command, command)
+        commands = {'add': (RTM_NEWRULE, flags_make),
+                    'del': (RTM_DELRULE, flags_make),
+                    'remove': (RTM_DELRULE, flags_make),
+                    'delete': (RTM_DELRULE, flags_make),
+                    'change': (RTM_NEWRULE, flags_change),
+                    'replace': (RTM_NEWRULE, flags_replace)}
+        if isinstance(command, int):
+            command = (command, flags_make)
+        command, flags = commands.get(command, command)
 
-        msg_flags = NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_EXCL
-        msg = rtmsg()
+        if argv:
+            # this code block will be removed in some release
+            logging.warning('rule(): positional parameters are deprecated')
+            names = ['table', 'priority', 'action', 'family',
+                     'src', 'src_len', 'dst', 'dst_len', 'fwmark',
+                     'iifname', 'oifname']
+            kwarg.update(dict(zip(names, argv)))
+        msg = fibmsg()
+        table = kwarg.get('table', 254)
         msg['table'] = table if table <= 255 else 252
-        msg['family'] = family
-        msg['type'] = rtypes[rtype]
-        msg['scope'] = rtscopes[rtscope]
-        msg['attrs'] = [['RTA_TABLE', table]]
-        msg['attrs'].append(['RTA_PRIORITY', priority])
-        if fwmark is not None:
-            msg['attrs'].append(['RTA_PROTOINFO', fwmark])
-        addr_len = {AF_INET6: 128, AF_INET:  32}[family]
-        if(dst_len is not None and dst_len >= 0 and dst_len <= addr_len):
-            msg['dst_len'] = dst_len
-        else:
-            msg['dst_len'] = 0
-        if(src_len is not None and src_len >= 0 and src_len <= addr_len):
-            msg['src_len'] = src_len
-        else:
-            msg['src_len'] = 0
-        if src is not None:
-            msg['attrs'].append(['RTA_SRC', src])
-            if src_len is None:
-                msg['src_len'] = addr_len
-        if dst is not None:
-            msg['attrs'].append(['RTA_DST', dst])
-            if dst_len is None:
-                msg['dst_len'] = addr_len
+        msg['family'] = family = kwarg.pop('family', AF_INET)
+        msg['action'] = FR_ACT_NAMES[kwarg.pop('action', 'FR_ACT_NOP')]
+        msg['attrs'] = []
 
-        return self.nlm_request(msg, msg_type=command,
-                                msg_flags=msg_flags)
+        addr_len = {AF_INET6: 128, AF_INET:  32}.get(family, 0)
+        if 'priority' not in kwarg:
+            kwarg['priority'] = 32000
+        if ('src' in kwarg) and (kwarg.get('src_len') is None):
+            kwarg['src_len'] = addr_len
+        if ('dst' in kwarg) and (kwarg.get('dst_len') is None):
+            kwarg['dst_len'] = addr_len
+
+        msg['dst_len'] = kwarg.get('dst_len', 0)
+        msg['src_len'] = kwarg.get('src_len', 0)
+
+        for key in kwarg:
+            nla = fibmsg.name2nla(key)
+            if kwarg[key] is not None:
+                msg['attrs'].append([nla, kwarg[key]])
+
+        ret = self.nlm_request(msg, msg_type=command, msg_flags=flags)
+
+        if 'match' in kwarg:
+            return self._match(kwarg['match'], ret)
+        else:
+            return ret
     # 8<---------------------------------------------------------------
 
 
@@ -869,4 +1328,8 @@ class IPRoute(IPRouteMixin, IPRSocket):
     You can think of this class in some way as of plain old iproute2
     utility.
     '''
+    pass
+
+
+class RawIPRoute(IPRouteMixin, RawIPRSocket):
     pass

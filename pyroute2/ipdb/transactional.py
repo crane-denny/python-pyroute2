@@ -1,8 +1,10 @@
 '''
 '''
-import uuid
+import logging
 import threading
+import traceback
 from pyroute2.common import Dotkeys
+from pyroute2.common import uuid32
 from pyroute2.ipdb.common import SYNC_TIMEOUT
 from pyroute2.ipdb.common import CommitException
 from pyroute2.ipdb.common import DeprecationException
@@ -20,7 +22,8 @@ class State(object):
         self.flag += 1
 
     def release(self):
-        assert self.flag > 0
+        if self.flag < 1:
+            raise RuntimeError('release unlocked state')
         self.flag -= 1
         self.lock.release()
 
@@ -41,35 +44,45 @@ def update(f):
         ret = None
         tid = None
         direct = True
+        error = None
+
         with self._write_lock:
             dcall = kwarg.pop('direct', False)
             if dcall:
                 self._direct_state.acquire()
 
             direct = self._direct_state.is_set()
-            if not direct:
-                # 1. begin transaction for 'direct' type
-                if self._mode == 'direct':
-                    tid = self.begin()
-                # 2. begin transaction, if there is none
-                elif self._mode == 'implicit':
-                    if not self._tids:
-                        self.begin()
-                # 3. require open transaction for 'explicit' type
-                elif self._mode == 'explicit':
-                    if not self._tids:
-                        raise TypeError('start a transaction first')
-                # 4. transactions can not require transactions :)
-                elif self._mode == 'snapshot':
-                    direct = True
-                # do not support other modes
-                else:
-                    raise TypeError('transaction mode not supported')
-                # now that the transaction _is_ open
-            ret = f(self, direct, *argv, **kwarg)
+            try:
+                if not direct:
+                    # 1. begin transaction for 'direct' type
+                    if self._mode == 'direct':
+                        tid = self.begin()
+                    # 2. begin transaction, if there is none
+                    elif self._mode == 'implicit':
+                        if not self._tids:
+                            self.begin()
+                    # 3. require open transaction for 'explicit' type
+                    elif self._mode == 'explicit':
+                        if not self._tids:
+                            raise TypeError('start a transaction first')
+                    # 4. transactions can not require transactions :)
+                    elif self._mode == 'snapshot':
+                        direct = True
+                    # do not support other modes
+                    else:
+                        raise TypeError('transaction mode not supported')
+                    # now that the transaction _is_ open
+                ret = f(self, direct, *argv, **kwarg)
+            except Exception as e:
+                logging.error('transaction decorator error'
+                              '\n%s', traceback.format_exc())
+                error = e
 
             if dcall:
                 self._direct_state.release()
+
+            if error is not None:
+                raise error
 
         if tid:
             # close the transaction for 'direct' type
@@ -84,7 +97,9 @@ class Transactional(Dotkeys):
     '''
     Utility class that implements common transactional logic.
     '''
+    _fields = []
     _fields_cmp = {}
+    _linked_sets = None
 
     def __init__(self, ipdb=None, mode=None, parent=None, uid=None):
         #
@@ -105,10 +120,9 @@ class Transactional(Dotkeys):
             self._mode = mode or 'implicit'
         #
         self.nlmsg = None
-        self.uid = uid or uuid.uuid4()
+        self.uid = uid or uuid32()
         self.last_error = None
         self._commit_hooks = []
-        self._fields = []
         self._sids = []
         self._ts = threading.local()
         self._snapshots = {}
@@ -116,7 +130,7 @@ class Transactional(Dotkeys):
         self._local_targets = {}
         self._write_lock = threading.RLock()
         self._direct_state = State(self._write_lock)
-        self._linked_sets = set()
+        self._linked_sets = self._linked_sets or set()
 
     @property
     def _tids(self):
@@ -179,7 +193,7 @@ class Transactional(Dotkeys):
                     else:
                         res[key] = self[key]
             for key in self._linked_sets:
-                res[key] = LinkedSet(self[key])
+                res[key] = type(self[key])(self[key])
                 if not detached:
                     self[key].connect(res[key])
             return res
@@ -203,7 +217,7 @@ class Transactional(Dotkeys):
 
     def __repr__(self):
         res = {}
-        for i in self:
+        for i in tuple(self):
             if self[i] is not None:
                 res[i] = self[i]
         return res.__repr__()
@@ -213,11 +227,13 @@ class Transactional(Dotkeys):
         with self._direct_state:
             # simple keys
             for key in self:
-                if (key in self._fields) and \
-                        ((key not in vs) or (self[key] != vs[key])):
-                    res[key] = self[key]
+                if (key in self._fields):
+                    if ((key not in vs) or (self[key] != vs[key])):
+                        res[key] = self[key]
+                    elif (self[key] == vs[key]):
+                        res[key] = None
         for key in self._linked_sets:
-            diff = LinkedSet(self[key] - vs[key])
+            diff = type(self[key])(self[key] - vs[key])
             if diff:
                 res[key] = diff
         return res
@@ -234,6 +250,9 @@ class Transactional(Dotkeys):
                     else:
                         res[key] = self[key]
             return res
+
+    def detach(self):
+        pass
 
     def load(self, data):
         pass
@@ -296,12 +315,33 @@ class Transactional(Dotkeys):
 
             return self._transactions[self._tids[-1]]
 
+    def get_tx(self):
+        '''
+        Return the current active transaction. If there is no
+        active transaction and the mode is 'implicit', start
+        a new transaction.
+        '''
+        with self._write_lock:
+            if self._mode == 'implicit':
+                if not self._tids:
+                    return self._transactions[self.begin()]
+            elif self._mode == 'explicit':
+                if not self._tids:
+                    raise TypeError('start a transaction first')
+            else:
+                raise TypeError('transaction mode not supported')
+            return self._transactions[self._tids[-1]]
+
     def review(self):
         '''
         Review last open transaction
         '''
         if not self._tids:
             raise TypeError('start a transaction first')
+
+        if self.get('ipdb_scope') == 'create':
+            return dict([(x[0], x[1]) for x in self.items()
+                         if x[1] is not None])
 
         with self._write_lock:
             added = self.last() - self
@@ -322,13 +362,18 @@ class Transactional(Dotkeys):
             elif tid is None:
                 tid = self._tids[-1]
             self._tids.remove(tid)
-            del self._transactions[tid]
+            # detach linked sets
+            for key in self._linked_sets:
+                if self._transactions[tid][key] in self[key].links:
+                    self[key].disconnect(self._transactions[tid][key])
             for (key, value) in self.items():
                 if isinstance(value, Transactional):
                     try:
                         value.drop(tid)
                     except KeyError:
                         pass
+            # finally -- delete the transaction
+            del self._transactions[tid]
 
     @update
     def __setitem__(self, direct, key, value):
