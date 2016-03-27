@@ -1,6 +1,7 @@
 pyroute2 (0.3.16-1) UNRELEASED; urgency=medium
 
   * Bumping to version 0.3.16 (Closes: #797778)
+  * Bumping standards-version to 3.9.7
 
  -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Sun, 27 Mar 2016 23:07:47 +0200
 
