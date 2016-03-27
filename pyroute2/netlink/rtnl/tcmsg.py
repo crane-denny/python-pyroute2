@@ -1,6 +1,7 @@
 import re
 import os
 import struct
+import logging
 
 from pyroute2.common import size_suffixes
 from pyroute2.common import time_suffixes
@@ -8,7 +9,9 @@ from pyroute2.common import rate_suffixes
 from pyroute2.common import basestring
 from pyroute2.netlink import nlmsg
 from pyroute2.netlink import nla
-
+from pyroute2.netlink import NLA_F_NESTED
+from pyroute2.netlink.rtnl import RTM_NEWQDISC
+from pyroute2.netlink.rtnl import RTM_DELQDISC
 
 TCA_ACT_MAX_PRIO = 32
 
@@ -175,6 +178,61 @@ def _get_filter_police_parameter(kwarg):
     return police
 
 
+def _get_act_gact_parms(kwarg):
+    ret = {'attrs': []}
+    actions = nla_plus_tca_act_opt.tca_gact_opt.tca_gact_parms.actions
+    a = actions[kwarg.get('action', 'drop')]
+    ret['attrs'].append(['TCA_GACT_PARMS', {'action': a}])
+    return ret
+
+
+def _get_act_bpf_parms(kwarg):
+    ret = {'attrs': []}
+    if 'fd' in kwarg:
+        ret['attrs'].append(['TCA_ACT_BPF_FD', kwarg['fd']])
+    if 'name' in kwarg:
+        ret['attrs'].append(['TCA_ACT_BPF_NAME', kwarg['name']])
+    actions = nla_plus_tca_act_opt.tca_gact_opt.tca_gact_parms.actions
+    a = actions[kwarg.get('action', 'drop')]
+    ret['attrs'].append(['TCA_ACT_BPF_PARMS', {'action': a}])
+    return ret
+
+
+def _get_act_parms(kwarg):
+    if 'kind' not in kwarg:
+        raise Exception('action requires "kind" parameter')
+
+    if kwarg['kind'] == 'gact':
+        return _get_act_gact_parms(kwarg)
+    elif kwarg['kind'] == 'bpf':
+        return _get_act_bpf_parms(kwarg)
+    elif kwarg['kind'] == 'police':
+        return {'attrs': _get_filter_police_parameter(kwarg)}
+
+    return []
+
+
+# All filters can use any act type, this is a generic parser for all
+def _get_tca_action(kwarg):
+    ret = {'attrs': []}
+
+    act = kwarg.get('action', 'drop')
+
+    # convert simple action='..' to kwarg style
+    if isinstance(act, str):
+        act = {'kind': 'gact', 'action': act}
+
+    # convert single dict action to first entry in a list of actions
+    acts = act if isinstance(act, list) else [act]
+
+    for i, act in enumerate(acts, start=1):
+        opt = {'attrs': [['TCA_ACT_KIND', act['kind']],
+                         ['TCA_ACT_OPTIONS', _get_act_parms(act)]]}
+        ret['attrs'].append(['TCA_ACT_PRIO_%d' % i, opt])
+
+    return ret
+
+
 def get_u32_parameters(kwarg):
     ret = {'attrs': []}
 
@@ -183,6 +241,8 @@ def get_u32_parameters(kwarg):
             'TCA_U32_POLICE',
             {'attrs': _get_filter_police_parameter(kwarg)}
         ])
+    elif kwarg.get('action'):
+        ret['attrs'].append(['TCA_U32_ACT', _get_tca_action(kwarg)])
 
     ret['attrs'].append(['TCA_U32_CLASSID', kwarg['target']])
     ret['attrs'].append(['TCA_U32_SEL', {'keys': kwarg['keys']}])
@@ -204,6 +264,34 @@ def get_fw_parameters(kwarg):
     if kwarg.get('rate'):
         ret['attrs'].append([
             'TCA_FW_POLICE',
+            {'attrs': _get_filter_police_parameter(kwarg)}
+        ])
+
+    for k, v in attrs_map:
+        r = kwarg.get(k, None)
+        if r is not None:
+            ret['attrs'].append([v, r])
+
+    return ret
+
+
+def get_bpf_parameters(kwarg):
+    ret = {'attrs': []}
+    attrs_map = (
+        # ('action', 'TCA_BPF_ACT'),
+        # ('police', 'TCA_BPF_POLICE'),
+        ('classid', 'TCA_BPF_CLASSID'),
+        ('fd', 'TCA_BPF_FD'),
+        ('name', 'TCA_BPF_NAME'),
+    )
+
+    act = kwarg.get('action')
+    if act:
+        ret['attrs'].append(['TCA_BPF_ACT', _get_tca_action(kwarg)])
+
+    if kwarg.get('rate'):
+        ret['attrs'].append([
+            'TCA_BPF_POLICE',
             {'attrs': _get_filter_police_parameter(kwarg)}
         ])
 
@@ -291,6 +379,66 @@ def get_htb_class_parameters(kwarg):
                                          'ceil_mpu': mpu}],
                       ['TCA_HTB_RTAB', True],
                       ['TCA_HTB_CTAB', True]]}
+
+
+def get_hfsc_parameters(kwarg):
+    defcls = kwarg.get('default', kwarg.get('defcls', 0x10))
+    return {'defcls': defcls}
+
+
+def get_hfsc_class_parameters(kwarg):
+    ret = {'attrs': []}
+    for key in ('rsc', 'fsc', 'usc'):
+        if key in kwarg:
+            ret['attrs'].append(['TCA_HFSC_%s' % key.upper(),
+                                 {'m1': _get_rate(kwarg[key].get('m1', 0)),
+                                  'd': _get_rate(kwarg[key].get('d', 0)),
+                                  'm2': _get_rate(kwarg[key].get('m2', 0))}])
+    return ret
+
+
+def get_codel_parameters(kwarg):
+    #
+    # ACHTUNG: experimental code
+    #
+    # Parameters naming scheme WILL be changed in next releases
+    #
+    ret = {'attrs': []}
+    transform = {'cdl_limit': lambda x: x,
+                 'cdl_ecn': lambda x: x,
+                 'cdl_target': _get_time,
+                 'cdl_ce_threshold': _get_time,
+                 'cdl_interval': _get_time}
+    for key in transform.keys():
+        if key in kwarg:
+            logging.warning('codel parameters naming will be changed '
+                            'in next releases (%s)' % key)
+            ret['attrs'].append(['TCA_FQ_CODEL_%s' % key[4:].upper(),
+                                 transform[key](kwarg[key])])
+    return ret
+
+
+def get_fq_codel_parameters(kwarg):
+    #
+    # ACHTUNG: experimental code
+    #
+    # Parameters naming scheme WILL be changed in next releases
+    #
+    ret = {'attrs': []}
+    transform = {'fqc_limit': lambda x: x,
+                 'fqc_flows': lambda x: x,
+                 'fqc_quantum': lambda x: x,
+                 'fqc_ecn': lambda x: x,
+                 'fqc_target': _get_time,
+                 'fqc_ce_threshold': _get_time,
+                 'fqc_interval': _get_time}
+    for key in transform.keys():
+        if key in kwarg:
+            logging.warning('fq_codel parameters naming will be changed '
+                            'in next releases (%s)' % key)
+            ret['attrs'].append(['TCA_FQ_CODEL_%s' % key[4:].upper(),
+                                 transform[key](kwarg[key])])
+    return ret
 
 
 def get_htb_parameters(kwarg):
@@ -458,13 +606,58 @@ class nla_plus_rtab(nla):
         pass
 
 
+class codel_stats(nla):
+    fields = (('maxpacket', 'I'),
+              ('count', 'I'),
+              ('lastcount', 'I'),
+              ('ldelay', 'I'),
+              ('drop_next', 'I'),
+              ('drop_overlimit', 'I'),
+              ('ecn_mark', 'I'),
+              ('dropping', 'I'),
+              ('ce_mark', 'I'))
+
+
+class fq_codel_stats(nla):
+
+    TCA_FQ_CODEL_XSTATS_QDISC = 0
+    TCA_FQ_CODEL_XSTATS_CLASS = 1
+
+    qdisc_fields = (('maxpacket', 'I'),
+                    ('drop_overlimit', 'I'),
+                    ('ecn_mark', 'I'),
+                    ('new_flow_count', 'I'),
+                    ('new_flows_len', 'I'),
+                    ('old_flows_len', 'I'),
+                    ('ce_mark', 'I'))
+
+    class_fields = (('deficit', 'i'),
+                    ('ldelay', 'I'),
+                    ('count', 'I'),
+                    ('lastcount', 'I'),
+                    ('dropping', 'I'),
+                    ('drop_next', 'i'))
+
+    def decode(self):
+        nla.decode(self)
+        # read the type
+        kind = struct.unpack('I', self.buf.read(4))[0]
+        if kind == self.TCA_FQ_CODEL_XSTATS_QDISC:
+            self.fields = self.qdisc_fields
+        elif kind == self.TCA_FQ_CODEL_XSTATS_CLASS:
+            self.fields = self.class_fields
+        else:
+            raise TypeError("Unknown xstats type")
+        self.decode_fields()
+
+
 class nla_plus_stats2(object):
     class stats2(nla):
         nla_map = (('TCA_STATS_UNSPEC', 'none'),
                    ('TCA_STATS_BASIC', 'basic'),
                    ('TCA_STATS_RATE_EST', 'rate_est'),
                    ('TCA_STATS_QUEUE', 'queue'),
-                   ('TCA_STATS_APP', 'hex'))
+                   ('TCA_STATS_APP', 'stats_app'))
 
         class basic(nla):
             fields = (('bytes', 'Q'),
@@ -481,18 +674,24 @@ class nla_plus_stats2(object):
                       ('requeues', 'I'),
                       ('overlimits', 'I'))
 
-    class stats2_hfsc(stats2):
-        nla_map = (('TCA_STATS_UNSPEC', 'none'),
-                   ('TCA_STATS_BASIC', 'basic'),
-                   ('TCA_STATS_RATE_EST', 'rate_est'),
-                   ('TCA_STATS_QUEUE', 'queue'),
-                   ('TCA_STATS_APP', 'stats_app_hfsc'))
+        class stats_app(nla):
+            pass
 
-        class stats_app_hfsc(nla):
+    class stats2_hfsc(stats2):
+
+        class stats_app(nla):
             fields = (('work', 'Q'),  # total work done
                       ('rtwork', 'Q'),  # total work done by real-time criteria
                       ('period', 'I'),  # current period
                       ('level', 'I'))  # class level in hierarchy
+
+    class stats2_codel(stats2):
+        class stats_app(codel_stats):
+            pass
+
+    class stats2_fq_codel(stats2):
+        class stats_app(fq_codel_stats):
+            pass
 
 
 class nla_plus_police(object):
@@ -534,6 +733,54 @@ class nla_plus_police(object):
                        'pipe': 3}        # TC_POLICE_PIPE
 
 
+class nla_plus_tca_act_opt(object):
+    def get_act_options(self, *argv, **kwarg):
+        kind = self.get_attr('TCA_ACT_KIND')
+        if kind == 'bpf':
+            return self.tca_act_bpf_opt
+        elif kind == 'gact':
+            return self.tca_gact_opt
+        elif kind == 'police':
+            return nla_plus_police.police
+        return self.hex
+
+    class tca_act_bpf_opt(nla):
+        nla_map = (('TCA_ACT_BPF_UNSPEC', 'none'),
+                   ('TCA_ACT_BPF_TM,', 'none'),
+                   ('TCA_ACT_BPF_PARMS', 'tca_act_bpf_parms'),
+                   ('TCA_ACT_BPF_OPS_LEN', 'uint16'),
+                   ('TCA_ACT_BPF_OPS', 'hex'),
+                   ('TCA_ACT_BPF_FD', 'uint32'),
+                   ('TCA_ACT_BPF_NAME', 'asciiz'))
+
+        class tca_act_bpf_parms(nla):
+            fields = (('index', 'I'),
+                      ('capab', 'I'),
+                      ('action', 'i'),
+                      ('refcnt', 'i'),
+                      ('bindcnt', 'i'))
+
+    class tca_gact_opt(nla):
+        nla_flags = NLA_F_NESTED
+        nla_map = (('TCA_GACT_UNSPEC', 'none'),
+                   ('TCA_GACT_TM', 'none'),
+                   ('TCA_GACT_PARMS', 'tca_gact_parms'),
+                   ('TCA_GACT_PROB', 'none'))
+
+        class tca_gact_parms(nla):
+            fields = (('index', 'I'),
+                      ('capab', 'I'),
+                      ('action', 'i'),
+                      ('refcnt', 'i'),
+                      ('bindcnt', 'i'))
+
+            actions = {'unspec': -1,     # TC_ACT_UNSPEC
+                       'ok': 0,          # TC_ACT_OK
+                       'shot': 2,        # TC_ACT_SHOT
+                       'drop': 2,        # TC_ACT_SHOT
+                       'pipe': 3}        # TC_ACT_PIPE
+
+
 class tcmsg(nlmsg, nla_plus_stats2):
 
     prefix = 'TCA_'
@@ -570,12 +817,20 @@ class tcmsg(nlmsg, nla_plus_stats2):
         kind = self.get_attr('TCA_KIND')
         if kind == 'hfsc':
             return self.stats2_hfsc
+        elif kind == 'codel':
+            return self.stats2_codel
+        elif kind == 'fq_codel':
+            return self.stats2_fq_codel
         return self.stats2
 
     def get_xstats(self, *argv, **kwarg):
         kind = self.get_attr('TCA_KIND')
         if kind == 'htb':
             return self.xstats_htb
+        elif kind == 'codel':
+            return codel_stats
+        elif kind == 'fq_codel':
+            return fq_codel_stats
         return self.hex
 
     class xstats_htb(nla):
@@ -598,8 +853,15 @@ class tcmsg(nlmsg, nla_plus_stats2):
                 return self.options_sfq_v1
             else:
                 return self.options_sfq_v0
+        elif kind == 'codel':
+            return self.options_codel
+        elif kind == 'fq_codel':
+            return self.options_fq_codel
         elif kind == 'hfsc':
-            return self.options_hfsc
+            if self['header']['type'] in (RTM_NEWQDISC, RTM_DELQDISC):
+                return self.options_hfsc
+            else:
+                return self.options_hfsc_class
         elif kind == 'htb':
             return self.options_htb
         elif kind == 'netem':
@@ -608,19 +870,39 @@ class tcmsg(nlmsg, nla_plus_stats2):
             return self.options_u32
         elif kind == 'fw':
             return self.options_fw
+        elif kind == 'bpf':
+            return self.options_bpf
         return self.hex
 
     class options_ingress(nla):
         fields = (('value', 'I'), )
 
+    class options_codel(nla):
+        nla_map = (('TCA_CODEL_UNSPEC', 'none'),
+                   ('TCA_CODEL_TARGET', 'uint32'),
+                   ('TCA_CODEL_LIMIT', 'uint32'),
+                   ('TCA_CODEL_INTERVAL', 'uint32'),
+                   ('TCA_CODEL_ECN', 'uint32'),
+                   ('TCA_CODEL_CE_THRESHOLD', 'uint32'))
+
+    class options_fq_codel(nla):
+        nla_map = (('TCA_FQ_CODEL_UNSPEC', 'none'),
+                   ('TCA_FQ_CODEL_TARGET', 'uint32'),
+                   ('TCA_FQ_CODEL_LIMIT', 'uint32'),
+                   ('TCA_FQ_CODEL_INTERVAL', 'uint32'),
+                   ('TCA_FQ_CODEL_ECN', 'uint32'),
+                   ('TCA_FQ_CODEL_FLOWS', 'uint32'),
+                   ('TCA_FQ_CODEL_QUANTUM', 'uint32'),
+                   ('TCA_FQ_CODEL_CE_THRESHOLD', 'uint32'))
+
     class options_hfsc(nla):
-        nla_map = (('TCA_HFSC_UNSPEC', 'hfsc_qopt'),
+        fields = (('defcls', 'H'),)  # default class
+
+    class options_hfsc_class(nla):
+        nla_map = (('TCA_HFSC_UNSPEC', 'none'),
                    ('TCA_HFSC_RSC', 'hfsc_curve'),  # real-time curve
                    ('TCA_HFSC_FSC', 'hfsc_curve'),  # link-share curve
                    ('TCA_HFSC_USC', 'hfsc_curve'))  # upper-limit curve
-
-        class hfsc_qopt(nla):
-            fields = (('defcls', 'H'),)  # default class
 
         class hfsc_curve(nla):
             fields = (('m1', 'I'),  # slope of the first segment in bps
@@ -700,6 +982,28 @@ class tcmsg(nlmsg, nla_plus_stats2):
                    ('TCA_FW_ACT', 'hex'),  # TODO
                    ('TCA_FW_MASK', 'uint32'))
 
+    class options_bpf(nla, nla_plus_police):
+        nla_map = (('TCA_BPF_UNSPEC', 'none'),
+                   ('TCA_BPF_ACT', 'bpf_act'),
+                   ('TCA_BPF_POLICE', 'police'),
+                   ('TCA_BPF_CLASSID', 'uint32'),
+                   ('TCA_BPF_OPS_LEN', 'uint32'),
+                   ('TCA_BPF_OPS', 'uint32'),
+                   ('TCA_BPF_FD', 'uint32'),
+                   ('TCA_BPF_NAME', 'asciiz'))
+
+        class bpf_act(nla):
+            nla_flags = NLA_F_NESTED
+            nla_map = tuple([('TCA_ACT_PRIO_%i' % x, 'tca_act_bpf') for x
+                             in range(TCA_ACT_MAX_PRIO)])
+
+            class tca_act_bpf(nla, nla_plus_stats2, nla_plus_tca_act_opt):
+                nla_map = (('TCA_ACT_UNSPEC', 'none'),
+                           ('TCA_ACT_KIND', 'asciiz'),
+                           ('TCA_ACT_OPTIONS', 'get_act_options'),
+                           ('TCA_ACT_INDEX', 'hex'),
+                           ('TCA_ACT_STATS', 'stats2'))
+
     class options_u32(nla, nla_plus_police):
         nla_map = (('TCA_U32_UNSPEC', 'none'),
                    ('TCA_U32_CLASSID', 'uint32'),
@@ -717,10 +1021,11 @@ class tcmsg(nlmsg, nla_plus_stats2):
             nla_map = tuple([('TCA_ACT_PRIO_%i' % x, 'tca_act') for x
                              in range(TCA_ACT_MAX_PRIO)])
 
-            class tca_act(nla, nla_plus_police, nla_plus_stats2):
+            class tca_act(nla, nla_plus_police, nla_plus_stats2,
+                          nla_plus_tca_act_opt):
                 nla_map = (('TCA_ACT_UNSPEC', 'none'),
                            ('TCA_ACT_KIND', 'asciiz'),
-                           ('TCA_ACT_OPTIONS', 'police'),
+                           ('TCA_ACT_OPTIONS', 'get_act_options'),
                            ('TCA_ACT_INDEX', 'hex'),
                            ('TCA_ACT_STATS', 'stats2'))
 
@@ -744,15 +1049,16 @@ class tcmsg(nlmsg, nla_plus_stats2):
 
             def encode(self):
                 '''
-                'keys': ['0x0006/0x00ff+8',
-                         '0x0000/0xffc0+2',
-                         '0x5/0xf+0',
-                         '0x10/0xff+33']
+                Key sample::
 
-                => 00060000/00ff0000 + 8
-                   05000000/0f00ffc0 + 0
-                   00100000/00ff0000 + 32
+                    'keys': ['0x0006/0x00ff+8',
+                             '0x0000/0xffc0+2',
+                             '0x5/0xf+0',
+                             '0x10/0xff+33']
 
+                    => 00060000/00ff0000 + 8
+                       05000000/0f00ffc0 + 0
+                       00100000/00ff0000 + 32
                 '''
 
                 def cut_field(key, separator):

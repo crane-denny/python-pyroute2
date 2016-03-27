@@ -1,6 +1,83 @@
 changelog
 =========
 
+* 0.3.16
+    * ipdb: fix the multiple IPs in one commit case
+    * rtnl: support veth peer attributes
+    * netns: support 32bit i686
+    * netns: fix MIPS support
+    * netns: fix tun/tap creation
+    * netns: fix interface move between namespaces
+    * tcmsg: support hfsc, fq_codel, codel qdiscs
+    * nftables: initial support
+    * netlink: dump/load messages to/from simple types
+* 0.3.15
+    * netns: #194 -- fix fd leak
+    * iproute: #184 -- fix routes dump
+    * rtnl: TCA_ACT_BPF support
+    * rtnl: ipvlan support
+    * rtnl: OVS support removed
+    * iproute: rule() improved to support all NLAs
+    * project supported by Ericsson
+* 0.3.14
+    * package-rh: spec fixed
+    * package-rh: both licenses added
+    * remote: fixed the setup.py record
+* 0.3.13
+    * package-rh: new rpm for Fedora and CentOS
+    * remote: new draft of the remote protocol
+    * netns: refactored using the new remote protocol
+    * ipdb: gretap support
+* 0.3.12
+    * ipdb: new `Interface.wait_ip()` routine
+    * ipdb: #175 -- fix `master` attribute cleanup
+    * ipdb: #171 -- support multipath routes
+    * ipdb: memory consumption improvements
+    * rtmsg: MPLS support
+    * rtmsg: RTA_VIA support
+    * iwutil: #174 -- fix FREQ_FIXED flag
+* 0.3.11
+    * ipdb: #161 -- fix memory allocations
+    * nlsocket: #161 -- remove monitor mode
+* 0.3.10
+    * rtnl: added BPF filters
+    * rtnl: LWtunnel support in ifinfmsg
+    * ipdb: support address attributes
+    * ipdb: global transactions, initial version
+    * ipdb: routes refactored to use key index (speed up)
+    * config: eventlet support embedded (thanks to Angus Lees)
+    * iproute: replace tc classes
+    * iproute: flush_addr(), flush_rules()
+    * iproute: rule() refactored
+    * netns: proxy file objects (stdin, stdout, stderr)
+* 0.3.9
+    * root imports: #109, #135 -- `issubclass`, `isinstance`
+    * iwutil: multiple improvements
+    * iwutil: initial tests
+    * proxy: correctly forward NetlinkError
+    * iproute: neighbour tables support
+    * iproute: #147, filters on dump calls
+    * config: initial usage of `capabilities`
+* 0.3.8
+    * docs: inheritance diagrams
+    * nlsocket: #126, #132 -- resource deallocation
+    * arch: #128, #131 -- MIPS support
+    * setup.py: #133 -- syntax error during install on Python2
+* 0.3.7
+    * ipdb: new routing syntax
+    * ipdb: sync interface movement between namespaces
+    * ipdb: #125 -- fix route metrics
+    * netns: new class NSPopen
+    * netns: #119 -- i386 syscall
+    * netns: #122 -- return correct errno
+    * netlink: #126 -- fix socket reuse
+* 0.3.6
+    * dhcp: initial release DHCPv4
+    * license: dual GPLv2+ and Apache v2.0
+    * ovs: port add/delete
+    * macvlan, macvtap: basic support
+    * vxlan: basic support
+    * ipset: basic support
 * 0.3.5
     * netns: #90 -- netns setns support
     * generic: #99 -- support custom basic netlink socket classes
@@ -93,7 +170,7 @@ changelog
 * 0.2.7
     * ipdb: use separate namespaces for utility functions and other stuff
     * ipdb: generic callbacks (see also IPDB.wait_interface())
-    * iocore: initial multipath support 
+    * iocore: initial multipath support
     * iocore: use of 16byte uuid4 for packet ids
 * 0.2.6
     * rpc: initial version, REQ/REP, PUSH/PULL

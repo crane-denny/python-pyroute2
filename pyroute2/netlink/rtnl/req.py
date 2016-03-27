@@ -1,5 +1,6 @@
 from socket import AF_INET6
 from pyroute2.common import basestring
+from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
 from pyroute2.netlink.rtnl.rtmsg import rtmsg
 
 
@@ -23,12 +24,17 @@ class IPRouteRequest(IPRequest):
     '''
 
     def __setitem__(self, key, value):
+        # skip virtual IPDB fields
+        if key.startswith('ipdb_'):
+            return
         # fix family
         if isinstance(value, basestring) and value.find(':') >= 0:
             self['family'] = AF_INET6
         # work on the rest
         if key == 'dst':
-            if value != 'default':
+            if isinstance(value, dict):
+                dict.__setitem__(self, 'dst', value)
+            elif value != 'default':
                 value = value.split('/')
                 if len(value) == 1:
                     dst = value[0]
@@ -45,7 +51,20 @@ class IPRouteRequest(IPRequest):
             for name in value:
                 rtax = rtmsg.metrics.name2nla(name)
                 ret['attrs'].append([rtax, value[name]])
-            dict.__setitem__(self, 'metrics', ret)
+            if ret['attrs']:
+                dict.__setitem__(self, 'metrics', ret)
+        elif key == 'multipath':
+            ret = []
+            for v in value:
+                nh = {'attrs': []}
+                for name in ('flag', 'hops', 'ifindex'):
+                    nh[name] = v.pop(name, 0)
+                for name in v:
+                    rta = rtmsg.name2nla(name)
+                    nh['attrs'].append([rta, v[name]])
+                ret.append(nh)
+            if ret:
+                dict.__setitem__(self, 'multipath', ret)
         else:
             dict.__setitem__(self, key, value)
 
@@ -105,7 +124,9 @@ class IPLinkRequest(IPRequest):
             self['IFLA_LINKINFO'] = {'attrs': []}
             linkinfo = self['IFLA_LINKINFO']['attrs']
             linkinfo.append(['IFLA_INFO_KIND', value])
-            if value in ('vlan', 'bond', 'tuntap', 'veth'):
+            if value in ('vlan', 'bond', 'tuntap', 'veth',
+                         'vxlan', 'macvlan', 'macvtap', 'gre',
+                         'gretap', 'ipvlan', 'bridge'):
                 linkinfo.append(['IFLA_INFO_DATA', {'attrs': []}])
         elif key == 'vlan_id':
             nla = ['IFLA_VLAN_ID', value]
@@ -121,18 +142,48 @@ class IPLinkRequest(IPRequest):
             self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
                            lambda x: x.get('kind', None) == 'tuntap')
         elif key == 'mode':
+            nla = ['IFLA_IPVLAN_MODE', value]
+            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
+                           lambda x: x.get('kind', None) == 'ipvlan')
             nla = ['IFTUN_MODE', value]
             self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
                            lambda x: x.get('kind', None) == 'tuntap')
             nla = ['IFLA_BOND_MODE', value]
             self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
                            lambda x: x.get('kind', None) == 'bond')
+        elif key == 'stp_state':
+            nla = ['IFLA_BRIDGE_STP_STATE', value]
+            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
+                           lambda x: x.get('kind', None) == 'bridge')
         elif key == 'ifr':
             nla = ['IFTUN_IFR', value]
             self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
                            lambda x: x.get('kind', None) == 'tuntap')
+        elif key.startswith('macvtap'):
+            nla = [ifinfmsg.name2nla(key), value]
+            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
+                           lambda x: x.get('kind', None) == 'macvtap')
+        elif key.startswith('macvlan'):
+            nla = [ifinfmsg.name2nla(key), value]
+            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
+                           lambda x: x.get('kind', None) == 'macvlan')
+        elif key.startswith('gre'):
+            nla = [ifinfmsg.name2nla(key), value]
+            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
+                           lambda x: x.get('kind', None) == 'gre' or
+                           x.get('kind', None) == 'gretap')
+        elif key.startswith('vxlan'):
+            nla = [ifinfmsg.name2nla(key), value]
+            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
+                           lambda x: x.get('kind', None) == 'vxlan')
         elif key == 'peer':
-            nla = ['VETH_INFO_PEER', {'attrs': [['IFLA_IFNAME', value]]}]
+            if isinstance(value, dict):
+                attrs = []
+                for k, v in value.items():
+                    attrs.append([ifinfmsg.name2nla(k), v])
+            else:
+                attrs = [['IFLA_IFNAME', value], ]
+            nla = ['VETH_INFO_PEER', {'attrs': attrs}]
             self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
                            lambda x: x.get('kind', None) == 'veth')
         dict.__setitem__(self, key, value)
