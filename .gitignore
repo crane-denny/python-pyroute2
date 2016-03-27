@@ -1,2 +1,12 @@
+debian/files
 debian/python-pyroute2/
+debian/python-pyroute2.debhelper.log
+debian/python-pyroute2.postinst.debhelper
+debian/python-pyroute2.prerm.debhelper
+debian/python-pyroute2.substvars
 debian/python3-pyroute2/
+debian/python3-pyroute2.debhelper.log
+debian/python3-pyroute2.postinst.debhelper
+debian/python3-pyroute2.prerm.debhelper
+debian/python3-pyroute2.substvars
+.pybuild/
