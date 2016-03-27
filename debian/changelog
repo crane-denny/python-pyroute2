@@ -1,3 +1,9 @@
+pyroute2 (0.3.16-1) UNRELEASED; urgency=medium
+
+  * Bumping to version 0.3.16 (Closes: #797778)
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Sun, 27 Mar 2016 23:07:47 +0200
+
 pyroute2 (0.3.5-2) unstable; urgency=medium
 
   * Fixing debian/watch file for uscan
