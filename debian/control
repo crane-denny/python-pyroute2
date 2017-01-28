@@ -19,6 +19,7 @@ Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}
 Provides: ${python:Provides}
 Recommends: ${python:Recommends}
+Suggests: python-pyroute2-doc
 Description: Python Netlink library
  Pyroute2 is a pure Python netlink and Linux network configuration
  library. It requires only Python stdlib, no 3rd party libraries.
@@ -32,6 +33,7 @@ Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}
 Provides: ${python3:Provides}
 Recommends: ${python3:Recommends}
+Suggests: python-pyroute2-doc
 Description: Python3 Netlink library
  Pyroute2 is a pure Python netlink and Linux network configuration
  library. It requires only Python stdlib, no 3rd party libraries.
