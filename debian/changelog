@@ -1,4 +1,4 @@
-pyroute2 (0.4.12-1) UNRELEASED; urgency=medium
+pyroute2 (0.4.12-1) unstable; urgency=medium
 
   * Bumping to version 0.4.12 (Closes: #830114)
   * Bumping standards-version to 3.9.8
