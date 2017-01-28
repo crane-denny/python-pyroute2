@@ -4,11 +4,11 @@ Upstream-Contact: Peter V. Saveliev <peter@svinota.eu>
 Source: https://pypi.python.org/pypi/pyroute2
 
 Files: *
-Copyright: 2013-2014 Peter V. Saveliev
+Copyright:  2013-2017 Peter V. Saveliev
 License: GPL-2+
 
 Files: debian/*
-Copyright: 2015 Florian Pelgrim
+Copyright: 2015-2017 Florian Pelgrim <florian.pelgrim@craneworks.de>
 License: GPL-2+
 
 License: GPL-2+
