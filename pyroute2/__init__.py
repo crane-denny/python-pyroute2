@@ -1,23 +1,56 @@
 ##
-# Defer all root imports
 #
-# This allows to safely import config, change it, and
-# only after that actually run imports, though the
-# import statement can be on the top of the file
+# NB: the deferred import code may be removed
 #
-# Viva PEP8, morituri te salutant!
+# That should not affect neither the public API, nor the
+# type matching with isinstance() and issubclass()
 #
-# Surely, you still can import modules directly from their
-# places, like `from pyroute2.iproute import IPRoute`
-##
+import sys
+import struct
+import logging
 from abc import ABCMeta
+from pyroute2.ipdb.exceptions import \
+    DeprecationException, \
+    CommitException, \
+    CreateException, \
+    PartialCommitException
+from pyroute2.netlink.exceptions import \
+    NetlinkError, \
+    NetlinkDecodeError
+
+log = logging.getLogger(__name__)
+
+try:
+    # probe, if the bytearray can be used in struct.unpack_from()
+    struct.unpack_from('I', bytearray((1, 0, 0, 0)), 0)
+except:
+    if sys.version_info[0] < 3:
+        # monkeypatch for old Python versions
+        log.warning('patching struct.unpack_from()')
+
+        def wrapped(fmt, buf, offset=0):
+            return struct._u_f_orig(fmt, str(buf), offset)
+        struct._u_f_orig = struct.unpack_from
+        struct.unpack_from = wrapped
+    else:
+        raise
+
+# reexport exceptions
+exceptions = [NetlinkError,
+              NetlinkDecodeError,
+              DeprecationException,
+              CommitException,
+              CreateException,
+              PartialCommitException]
 
 __all__ = []
 _modules = {'IPRoute': 'pyroute2.iproute',
+            'IPBatch': 'pyroute2.iproute',
             'RawIPRoute': 'pyroute2.iproute',
             'IPSet': 'pyroute2.ipset',
-            'IPDB': 'pyroute2.ipdb',
+            'IPDB': 'pyroute2.ipdb.main',
             'IW': 'pyroute2.iwutil',
+            'DL': 'pyroute2.devlink',
             'NetNS': 'pyroute2.netns.nslink',
             'NSPopen': 'pyroute2.netns.process.proxy',
             'IPRSocket': 'pyroute2.netlink.rtnl.iprsocket',
@@ -25,9 +58,12 @@ _modules = {'IPRoute': 'pyroute2.iproute',
             'IPLinkRequest': 'pyroute2.netlink.rtnl.req',
             'TaskStats': 'pyroute2.netlink.taskstats',
             'NL80211': 'pyroute2.netlink.nl80211',
+            'DevlinkSocket': 'pyroute2.netlink.devlink',
             'IPQSocket': 'pyroute2.netlink.ipq',
+            'DiagSocket': 'pyroute2.netlink.diag',
             'GenericNetlinkSocket': 'pyroute2.netlink.generic',
-            'NetlinkError': 'pyroute2.netlink'}
+            'NFTSocket': 'pyroute2.netlink.nfnetlink.nftables'}
+
 
 _DISCLAIMER = '''\n\nNotice:\n
 This is a proxy class. To read full docs, please run
@@ -103,3 +139,15 @@ for name in _modules:
     f = _bake(name)
     globals()[name] = f
     __all__.append(name)
+
+
+class __common(object):
+    def __getattribute__(self, key):
+        log.warning('module pyroute2.ipdb.common is deprecated, '
+                    'use pyroute2.ipdb.exceptions instead')
+        return getattr(globals()['ipdb'].exceptions, key)
+
+
+globals()['ipdb'].common = __common()
+
+__all__.extend([x.__name__ for x in exceptions])

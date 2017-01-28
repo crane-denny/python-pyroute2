@@ -1,0 +1,259 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Netlink debug howto &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="Project contribution guide" href="devcontribute.html" />
+    <link rel="prev" title="MPLS howto" href="mpls.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="devcontribute.html" title="Project contribution guide"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="mpls.html" title="MPLS howto"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="netlink-debug-howto">
+<h1>Netlink debug howto<a class="headerlink" href="#netlink-debug-howto" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="dump-data">
+<h2>Dump data<a class="headerlink" href="#dump-data" title="Permalink to this headline">¶</a></h2>
+<p>Either run the required command via <cite>strace</cite>, or attach to the running
+process with <cite>strace -p</cite>. Use <cite>-s {int}</cite> argument to make sure that all
+the messages are dumped. The <cite>-x</cite> argument instructs <cite>strace</cite> to produce
+output in the hex format that can be passed to the pyroute2 decoder:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ strace -e trace=network -x -s 16384 ip ro
+socket(PF_NETLINK, SOCK_RAW|SOCK_CLOEXEC, NETLINK_ROUTE) = 3
+setsockopt(3, SOL_SOCKET, SO_SNDBUF, [32768], 4) = 0
+setsockopt(3, SOL_SOCKET, SO_RCVBUF, [1048576], 4) = 0
+bind(3, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 0
+getsockname(3, {sa_family=AF_NETLINK, pid=28616, groups=00000000}, [12]) = 0
+sendto(3, &quot;\x28\x00\x00\x00\x1a\x00\x01\x03 [skip] &quot;, 40, 0, NULL, 0) = 40
+recvmsg(3, {msg_name(12)={sa_family=AF_NETLINK, pid=0, groups=00000000},
+        msg_iov(1)=[{&quot;\x3c\x00\x00\x00\x18 [skip]&quot;, 16384}],
+        msg_controllen=0, msg_flags=0}, 0) = 480
+socket(PF_LOCAL, SOCK_DGRAM|SOCK_CLOEXEC, 0) = 4
+192.168.122.0/24 dev virbr0  proto kernel  scope link  src 192.168.122.1
+recvmsg(3, {msg_name(12)={sa_family=AF_NETLINK, pid=0, groups=00000000},
+        msg_iov(1)=[{&quot;\x14\x00\x00\x00\x03 [skip]&quot;, 16384}],
+        msg_controllen=0, msg_flags=0}, 0) = 20
++++ exited with 0 +++
+</pre></div>
+</div>
+<p>Now you can copy <cite>send…()</cite> and <cite>recv…()</cite> buffer strings to a file.</p>
+</div>
+<div class="section" id="decode-data">
+<h2>Decode data<a class="headerlink" href="#decode-data" title="Permalink to this headline">¶</a></h2>
+<p>The decoder is not provided with rpm or pip packages, so you should
+have a local git repo of the project:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ git clone &lt;url&gt;
+$ cd pyroute2
+</pre></div>
+</div>
+<p>Now run the decoder:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ export PYTHONPATH=`pwd`
+$ python tests/decoder/decoder.py &lt;message.class&gt; &lt;data&gt;
+</pre></div>
+</div>
+<p>E.g. for the route dump in the file <cite>rt.dump</cite> the command line
+should be:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ python tests/decoder/decoder.py \
+    pyroute2.netlink.rtnl.rtmsg.rtmsg \
+    rt.dump
+</pre></div>
+</div>
+<p><strong>Why should I specify the message class?</strong> Why there is no marshalling
+in the decoder script? &#8216;Cause it is intended to be used with different
+netlink protocols, not only RTNL, but also nl80211, nfnetlink etc.
+There is no common marshalling for all the netlink protocols.</p>
+<p><strong>How to specify the message class?</strong> All the netlink protocols are
+defined under <cite>pyroute2/netlink/</cite>, e.g. <cite>rtmsg</cite> module is
+<cite>pyroute2/netlink/rtnl/rtmsg.py</cite>. Thereafter you should specify the
+class inside the module, since there can be several classes. In the
+<cite>rtmsg</cite> case the line will be <cite>pyroute.netlink.rtnl.rtmsg.rtmsg</cite> or,
+more friendly to the bash autocomplete, <cite>pyroute2/netlink/rtnl/rtmsg.rtmsg</cite>.
+Notice, that the class you have to specify with dot anyways.</p>
+<p><strong>What is the data file format?</strong> Rules are as follows:</p>
+<ul class="simple">
+<li>The data dump should be in a hex format. Two possible variants are:
+<cite>\x00\x01\x02\x03</cite> or <cite>00:01:02:03</cite>.</li>
+<li>There can be several packets in the same file. They should be of the
+same type.</li>
+<li>Spaces and line ends are ignored, so you can format the dump as you
+want.</li>
+<li>The <cite>#</cite> symbol starts a comment until the end of the line.</li>
+<li>The <cite>#!</cite> symbols start a comment until the end of the file.</li>
+</ul>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># ifinfmsg headers</span>
+<span class="c1">#</span>
+<span class="c1"># nlmsg header</span>
+\<span class="n">x84</span>\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>  <span class="c1"># length</span>
+\<span class="n">x10</span>\<span class="n">x00</span>          <span class="c1"># type</span>
+\<span class="n">x05</span>\<span class="n">x06</span>          <span class="c1"># flags</span>
+\<span class="n">x49</span>\<span class="n">x61</span>\<span class="n">x03</span>\<span class="n">x55</span>  <span class="c1"># sequence number</span>
+\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>  <span class="c1"># pid</span>
+<span class="c1"># RTNL header</span>
+\<span class="n">x00</span>\<span class="n">x00</span>          <span class="c1"># ifi_family</span>
+\<span class="n">x00</span>\<span class="n">x00</span>          <span class="c1"># ifi_type</span>
+\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>  <span class="c1"># ifi_index</span>
+\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>  <span class="c1"># ifi_flags</span>
+\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>  <span class="c1"># ifi_change</span>
+<span class="c1"># ...</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="compile-data">
+<h2>Compile data<a class="headerlink" href="#compile-data" title="Permalink to this headline">¶</a></h2>
+<p>Starting with 0.4.1, the library provides <cite>BatchSocket</cite> class, that
+only compiles and collects requests instead of sending them to the
+kernel. E.g., it is used by <cite>IPBatch</cite>, that combines <cite>BatchSocket</cite>
+with <cite>IPRouteMixin</cite>, providing RTNL compiler:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ python3
+Python 3.4.3 (default, Mar 31 2016, 20:42:37)
+[GCC 5.3.1 20151207 (Red Hat 5.3.1-2)] on linux
+Type &quot;help&quot;, &quot;copyright&quot;, &quot;credits&quot; or &quot;license&quot; for more information.
+# import all the stuff
+&gt;&gt;&gt; from pyroute2 import IPBatch
+&gt;&gt;&gt; from pyroute2.common import hexdump
+# create the compiler
+&gt;&gt;&gt; ipb = IPBatch()
+# compile requests into one buffer
+&gt;&gt;&gt; ipb.link(&quot;add&quot;, index=550, kind=&quot;dummy&quot;, ifname=&quot;test&quot;)
+&gt;&gt;&gt; ipb.link(&quot;set&quot;, index=550, state=&quot;up&quot;)
+&gt;&gt;&gt; ipb.addr(&quot;add&quot;, index=550, address=&quot;10.0.0.2&quot;, mask=24)
+# inspect the buffer
+&gt;&gt;&gt; hexdump(ipb.batch)
+&#39;3c:00:00:00:10:00:05:06:00:00:00:00:a2:7c:00:00:00:00:00:00:
+ 26:02:00:00:00:00:00:00:00:00:00:00:09:00:03:00:74:65:73:74:
+ 00:00:00:00:10:00:12:00:0a:00:01:00:64:75:6d:6d:79:00:00:00:
+ 20:00:00:00:13:00:05:06:00:00:00:00:a2:7c:00:00:00:00:00:00:
+ 26:02:00:00:01:00:00:00:01:00:00:00:28:00:00:00:14:00:05:06:
+ 00:00:00:00:a2:7c:00:00:02:18:00:00:26:02:00:00:08:00:01:00:
+ 0a:00:00:02:08:00:02:00:0a:00:00:02&#39;
+# reset the buffer
+&gt;&gt;&gt; ipb.reset()
+</pre></div>
+</div>
+<p>Pls notice, that in Python2 you should use <cite>hexdump(str(ipb.batch))</cite>
+instead of <cite>hexdump(ipb.batch)</cite>.</p>
+<p>The data, compiled by <cite>IPBatch</cite> can be used either to run batch
+requests, when one <cite>send()</cite> call sends several messages at once, or
+to produce binary buffers to test your own netlink parsers. Or just
+to dump some data to be sent later and probably even on another host:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ipr</span><span class="o">.</span><span class="n">sendto</span><span class="p">(</span><span class="n">ipb</span><span class="o">.</span><span class="n">batch</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The compiler always produces requests with <cite>sequence_number == 0</cite>,
+so if there will be any responses, they can be handled as broadcasts.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Netlink debug howto</a><ul>
+<li><a class="reference internal" href="#dump-data">Dump data</a></li>
+<li><a class="reference internal" href="#decode-data">Decode data</a></li>
+<li><a class="reference internal" href="#compile-data">Compile data</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="mpls.html"
+                        title="previous chapter">MPLS howto</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="devcontribute.html"
+                        title="next chapter">Project contribution guide</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/debug.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="devcontribute.html" title="Project contribution guide"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="mpls.html" title="MPLS howto"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

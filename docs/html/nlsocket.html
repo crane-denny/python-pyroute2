@@ -1,0 +1,351 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Base netlink socket and marshal &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="prev" title="Netlink" href="netlink.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="netlink.html" title="Netlink"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <span class="target" id="module-pyroute2.netlink.nlsocket"></span><div class="section" id="base-netlink-socket-and-marshal">
+<h1>Base netlink socket and marshal<a class="headerlink" href="#base-netlink-socket-and-marshal" title="Permalink to this headline">¶</a></h1>
+<p>All the netlink providers are derived from the socket
+class, so they provide normal socket API, including
+<cite>getsockopt()</cite>, <cite>setsockopt()</cite>, they can be used in
+poll/select I/O loops etc.</p>
+<div class="section" id="asynchronous-i-o">
+<h2>asynchronous I/O<a class="headerlink" href="#asynchronous-i-o" title="Permalink to this headline">¶</a></h2>
+<p>To run async reader thread, one should call
+<cite>NetlinkSocket.bind(async=True)</cite>. In that case a
+background thread will be launched. The thread will
+automatically collect all the messages and store
+into a userspace buffer.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">There is no need to turn on async I/O, if you
+don&#8217;t plan to receive broadcast messages.</p>
+</div>
+</div>
+<div class="section" id="enobuf-and-async-i-o">
+<h2>ENOBUF and async I/O<a class="headerlink" href="#enobuf-and-async-i-o" title="Permalink to this headline">¶</a></h2>
+<p>When Netlink messages arrive faster than a program
+reads then from the socket, the messages overflow
+the socket buffer and one gets ENOBUF on <cite>recv()</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="o">...</span> <span class="bp">self</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="n">bufsize</span><span class="p">)</span>
+<span class="n">error</span><span class="p">:</span> <span class="p">[</span><span class="n">Errno</span> <span class="mi">105</span><span class="p">]</span> <span class="n">No</span> <span class="n">buffer</span> <span class="n">space</span> <span class="n">available</span>
+</pre></div>
+</div>
+<p>One way to avoid ENOBUF, is to use async I/O. Then the
+library not only reads and buffers all the messages, but
+also re-prioritizes threads. Suppressing the parser
+activity, the library increases the response delay, but
+spares CPU to read and enqueue arriving messages as
+fast, as it is possible.</p>
+<p>With logging level DEBUG you can notice messages, that
+the library started to calm down the parser thread:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">DEBUG</span><span class="p">:</span><span class="n">root</span><span class="p">:</span><span class="n">Packet</span> <span class="n">burst</span><span class="p">:</span> <span class="n">the</span> <span class="n">reader</span> <span class="n">thread</span> <span class="n">priority</span>
+    <span class="ow">is</span> <span class="n">increased</span><span class="p">,</span> <span class="n">beware</span> <span class="n">of</span> <span class="n">delays</span> <span class="n">on</span> <span class="n">netlink</span> <span class="n">calls</span>
+    <span class="n">Counters</span><span class="p">:</span> <span class="n">delta</span><span class="o">=</span><span class="mi">25</span> <span class="n">qsize</span><span class="o">=</span><span class="mi">25</span> <span class="n">delay</span><span class="o">=</span><span class="mf">0.1</span>
+</pre></div>
+</div>
+<p>This state requires no immediate action, but just some
+more attention. When the delay between messages on the
+parser thread exceeds 1 second, DEBUG messages become
+WARNING ones:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">WARNING</span><span class="p">:</span><span class="n">root</span><span class="p">:</span><span class="n">Packet</span> <span class="n">burst</span><span class="p">:</span> <span class="n">the</span> <span class="n">reader</span> <span class="n">thread</span> <span class="n">priority</span>
+    <span class="ow">is</span> <span class="n">increased</span><span class="p">,</span> <span class="n">beware</span> <span class="n">of</span> <span class="n">delays</span> <span class="n">on</span> <span class="n">netlink</span> <span class="n">calls</span>
+    <span class="n">Counters</span><span class="p">:</span> <span class="n">delta</span><span class="o">=</span><span class="mi">2525</span> <span class="n">qsize</span><span class="o">=</span><span class="mi">213536</span> <span class="n">delay</span><span class="o">=</span><span class="mi">3</span>
+</pre></div>
+</div>
+<p>This state means, that almost all the CPU resources are
+dedicated to the reader thread. It doesn&#8217;t mean, that
+the reader thread consumes 100% CPU &#8211; it means, that the
+CPU is reserved for the case of more intensive bursts. The
+library will return to the normal state only when the
+broadcast storm will be over, and then the CPU will be
+100% loaded with the parser for some time, when it will
+process all the messages queued so far.</p>
+</div>
+<div class="section" id="when-async-i-o-doesn-t-help">
+<h2>when async I/O doesn&#8217;t help<a class="headerlink" href="#when-async-i-o-doesn-t-help" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes, even turning async I/O doesn&#8217;t fix ENOBUF.
+Mostly it means, that in this particular case the Python
+performance is not enough even to read and store the raw
+data from the socket. There is no workaround for such
+cases, except of using something <em>not</em> Python-based.</p>
+<p>One can still play around with SO_RCVBUF socket option,
+but it doesn&#8217;t help much. So keep it in mind, and if you
+expect massive broadcast Netlink storms, perform stress
+testing prior to deploy a solution in the production.</p>
+</div>
+<div class="section" id="classes">
+<h2>classes<a class="headerlink" href="#classes" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyroute2.netlink.nlsocket.Marshal">
+<em class="property">class </em><code class="descclassname">pyroute2.netlink.nlsocket.</code><code class="descname">Marshal</code><a class="headerlink" href="#pyroute2.netlink.nlsocket.Marshal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generic marshalling class</p>
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.Marshal.parse">
+<code class="descname">parse</code><span class="sig-paren">(</span><em>data</em>, <em>seq=None</em>, <em>callback=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.Marshal.parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse string data.</p>
+<p>At this moment all transport, except of the native
+Netlink is deprecated in this library, so we should
+not support any defragmentation on that level</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin">
+<em class="property">class </em><code class="descclassname">pyroute2.netlink.nlsocket.</code><code class="descname">NetlinkMixin</code><span class="sig-paren">(</span><em>family=16</em>, <em>port=None</em>, <em>pid=None</em>, <em>fileno=None</em>, <em>all_ns=False</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generic netlink socket</p>
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.get">
+<code class="descname">get</code><span class="sig-paren">(</span><em>bufsize=16384</em>, <em>msg_seq=0</em>, <em>terminate=None</em>, <em>callback=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get parsed messages list. If <cite>msg_seq</cite> is given, return
+only messages with that <cite>msg[&#8216;header&#8217;][&#8216;sequence_number&#8217;]</cite>,
+saving all other messages into <cite>self.backlog</cite>.</p>
+<p>The routine is thread-safe.</p>
+<p>The <cite>bufsize</cite> parameter can be:</p>
+<blockquote>
+<div><ul>
+<li><dl class="first docutils">
+<dt>-1: bufsize will be calculated from the first 4 bytes of</dt>
+<dd><p class="first last">the network data</p>
+</dd>
+</dl>
+</li>
+<li><p class="first">0: bufsize will be calculated from SO_RCVBUF sockopt</p>
+</li>
+<li><p class="first">int &gt;= 0: just a bufsize</p>
+</li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.get_policy_map">
+<code class="descname">get_policy_map</code><span class="sig-paren">(</span><em>policy=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.get_policy_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return policy for a given message type or for all
+message types. Policy parameter can be either int,
+or a list of ints. Always return dictionary.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.put">
+<code class="descname">put</code><span class="sig-paren">(</span><em>msg</em>, <em>msg_type</em>, <em>msg_flags=1</em>, <em>addr=(0</em>, <em>0)</em>, <em>msg_seq=0</em>, <em>msg_pid=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.put" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct a message from a dictionary and send it to
+the socket. Parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li>msg &#8211; the message in the dictionary format</li>
+<li>msg_type &#8211; the message type</li>
+<li>msg_flags &#8211; the message flags to use in the request</li>
+<li>addr &#8211; <cite>sendto()</cite> addr, default <cite>(0, 0)</cite></li>
+<li>msg_seq &#8211; sequence number to use</li>
+<li>msg_pid &#8211; pid to use, if <cite>None</cite> &#8211; use os.getpid()</li>
+</ul>
+</div></blockquote>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">s</span> <span class="o">=</span> <span class="n">IPRSocket</span><span class="p">()</span>
+<span class="n">s</span><span class="o">.</span><span class="n">bind</span><span class="p">()</span>
+<span class="n">s</span><span class="o">.</span><span class="n">put</span><span class="p">({</span><span class="s1">&#39;index&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span> <span class="n">RTM_GETLINK</span><span class="p">)</span>
+<span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+<span class="n">s</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Please notice, that the return value of <cite>s.get()</cite> can be
+not the result of <cite>s.put()</cite>, but any broadcast message.
+To fix that, use <cite>msg_seq</cite> &#8211; the response must contain the
+same <cite>msg[&#8216;header&#8217;][&#8216;sequence_number&#8217;]</cite> value.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.register_callback">
+<code class="descname">register_callback</code><span class="sig-paren">(</span><em>callback</em>, <em>predicate=&lt;function &lt;lambda&gt;&gt;</em>, <em>args=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.register_callback" title="Permalink to this definition">¶</a></dt>
+<dd><p>Register a callback to run on a message arrival.</p>
+<p>Callback is the function that will be called with the
+message as the first argument. Predicate is the optional
+callable object, that returns True or False. Upon True,
+the callback will be called. Upon False it will not.
+Args is a list or tuple of arguments.</p>
+<p>Simplest example, assume ipr is the IPRoute() instance:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># create a simplest callback that will print messages</span>
+<span class="k">def</span> <span class="nf">cb</span><span class="p">(</span><span class="n">msg</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+
+<span class="c1"># register callback for any message:</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">register_callback</span><span class="p">(</span><span class="n">cb</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>More complex example, with filtering:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># Set object&#39;s attribute after the message key</span>
+<span class="k">def</span> <span class="nf">cb</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">obj</span><span class="p">):</span>
+    <span class="n">obj</span><span class="o">.</span><span class="n">some_attr</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s2">&quot;some key&quot;</span><span class="p">]</span>
+
+<span class="c1"># Register the callback only for the loopback device, index 1:</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">register_callback</span><span class="p">(</span><span class="n">cb</span><span class="p">,</span>
+                      <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
+                      <span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="p">))</span>
+</pre></div>
+</div>
+<p>Please note: you do <strong>not</strong> need to register the default 0 queue
+to invoke callbacks on broadcast messages. Callbacks are
+iterated <strong>before</strong> messages get enqueued.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.register_policy">
+<code class="descname">register_policy</code><span class="sig-paren">(</span><em>policy</em>, <em>msg_class=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.register_policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Register netlink encoding/decoding policy. Can
+be specified in two ways:
+<cite>nlsocket.register_policy(MSG_ID, msg_class)</cite>
+to register one particular rule, or
+<cite>nlsocket.register_policy({MSG_ID1: msg_class})</cite>
+to register several rules at once.
+E.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">policy</span> <span class="o">=</span> <span class="p">{</span><span class="n">RTM_NEWLINK</span><span class="p">:</span> <span class="n">ifinfmsg</span><span class="p">,</span>
+          <span class="n">RTM_DELLINK</span><span class="p">:</span> <span class="n">ifinfmsg</span><span class="p">,</span>
+          <span class="n">RTM_NEWADDR</span><span class="p">:</span> <span class="n">ifaddrmsg</span><span class="p">,</span>
+          <span class="n">RTM_DELADDR</span><span class="p">:</span> <span class="n">ifaddrmsg</span><span class="p">}</span>
+<span class="n">nlsocket</span><span class="o">.</span><span class="n">register_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>One can call <cite>register_policy()</cite> as many times,
+as one want to &#8211; it will just extend the current
+policy scheme, not replace it.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.unregister_callback">
+<code class="descname">unregister_callback</code><span class="sig-paren">(</span><em>callback</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.unregister_callback" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove the first reference to the function from the callback
+register</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.netlink.nlsocket.NetlinkMixin.unregister_policy">
+<code class="descname">unregister_policy</code><span class="sig-paren">(</span><em>policy</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netlink.nlsocket.NetlinkMixin.unregister_policy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Unregister policy. Policy can be:</p>
+<blockquote>
+<div><ul class="simple">
+<li>int &#8211; then it will just remove one policy</li>
+<li>list or tuple of ints &#8211; remove all given</li>
+<li>dict &#8211; remove policies by keys from dict</li>
+</ul>
+</div></blockquote>
+<p>In the last case the routine will ignore dict values,
+it is implemented so just to make it compatible with
+<cite>get_policy_map()</cite> return value.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Base netlink socket and marshal</a><ul>
+<li><a class="reference internal" href="#asynchronous-i-o">asynchronous I/O</a></li>
+<li><a class="reference internal" href="#enobuf-and-async-i-o">ENOBUF and async I/O</a></li>
+<li><a class="reference internal" href="#when-async-i-o-doesn-t-help">when async I/O doesn&#8217;t help</a></li>
+<li><a class="reference internal" href="#classes">classes</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="netlink.html"
+                        title="previous chapter">Netlink</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/nlsocket.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="netlink.html" title="Netlink"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

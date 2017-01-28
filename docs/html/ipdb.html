@@ -1,0 +1,739 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>IPDB module &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="Netns management overview" href="netns.html" />
+    <link rel="prev" title="IPRoute module" href="iproute.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="netns.html" title="Netns management overview"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="iproute.html" title="IPRoute module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <span class="target" id="module-pyroute2.ipdb.main"></span><div class="section" id="ipdb-module">
+<h1>IPDB module<a class="headerlink" href="#ipdb-module" title="Permalink to this headline">¶</a></h1>
+<p>Basically, IPDB is a transactional database, containing
+records, that represent network stack objects. Any change
+in the database is not reflected immediately in OS, but
+waits until <cite>commit()</cite> is called. One failed operation
+during <cite>commit()</cite> rolls back all the changes, has been made
+so far. Moreover, IPDB has commit hooks API, that allows
+you to roll back changes depending on your own function
+calls, e.g. when a host or a network becomes unreachable.</p>
+<div class="section" id="ipdb-vs-iproute">
+<h2>IPDB vs. IPRoute<a class="headerlink" href="#ipdb-vs-iproute" title="Permalink to this headline">¶</a></h2>
+<p>These two modules, IPRoute and IPDB, use completely different
+approaches. The first one, IPRoute, just forward requests to
+the kernel, and doesn&#8217;t wait for the system state. So it&#8217;s up
+to developer to check, whether the requested object is really
+set up, or not yet.</p>
+<p>The latter, IPDB, is an asynchronously updated database, that
+starts several additional threads by default. If your
+project&#8217;s policy doesn&#8217;t allow implicit threads, keep it in
+mind. But unlike IPRoute, the IPDB ensures the changes to
+be reflected in the system:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">IPDB</span><span class="p">()</span> <span class="k">as</span> <span class="n">ipdb</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="p">[</span><span class="s1">&#39;eth0&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">i</span><span class="p">:</span>
+        <span class="n">i</span><span class="o">.</span><span class="n">up</span><span class="p">()</span>
+        <span class="n">i</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;192.168.0.2/24&#39;</span><span class="p">)</span>
+        <span class="n">i</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;192.168.0.3/24&#39;</span><span class="p">)</span>
+    <span class="c1"># ---&gt; &lt;--- here you can expect `eth0` is up</span>
+    <span class="c1">#           and has these two addresses, so</span>
+    <span class="c1">#           the following code can rely on that</span>
+</pre></div>
+</div>
+<p>So IPDB is updated asynchronously, but the <cite>commit()</cite>
+operation is synchronous. At least, it is planned to be such.</p>
+<p>NB: <em>In the example above `commit()` is implied with the
+`__exit__()` of the `with` statement.</em></p>
+<p>The choice between IPDB and IPRoute depends on your project&#8217;s
+workflow. If you plan to retrieve the system info not too
+often (or even once), or you are sure there will be not too
+many network object, it is better to use IPRoute. If you
+plan to lookup the network info on the regular basis and
+there can be loads of network objects, it is better to use
+IPDB. Why?</p>
+<p>IPRoute just loads what you ask &#8211; and loads all the
+information you ask to. While IPDB loads all the info upon
+startup, and later is just updated by asynchronous broadcast
+netlink messages. Assume you want to lookup ARP cache that
+contains hundreds or even thousands of objects. Using
+IPRoute, you have to load all the ARP cache every time you
+want to make a lookup. While IPDB will load all the cache
+once, and then maintain it up-to-date just inserting new
+records or removing them by one.</p>
+<p>So, IPRoute is much simpler when you need to make a call and
+then exit, while IPDB is cheaper in terms of CPU performance
+if you implement a long-running program like a daemon.</p>
+</div>
+<div class="section" id="quickstart">
+<h2>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline">¶</a></h2>
+<p>Simple tutorial:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+<span class="c1"># several IPDB instances are supported within on process</span>
+<span class="n">ipdb</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">()</span>
+
+<span class="c1"># commit is called automatically upon the exit from `with`</span>
+<span class="c1"># statement</span>
+<span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">eth0</span> <span class="k">as</span> <span class="n">i</span><span class="p">:</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">address</span> <span class="o">=</span> <span class="s1">&#39;00:11:22:33:44:55&#39;</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">ifname</span> <span class="o">=</span> <span class="s1">&#39;bala&#39;</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">txqlen</span> <span class="o">=</span> <span class="mi">2000</span>
+
+<span class="c1"># basic routing support</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">add</span><span class="p">({</span><span class="s1">&#39;dst&#39;</span><span class="p">:</span> <span class="s1">&#39;default&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;10.0.0.1&#39;</span><span class="p">})</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+<span class="c1"># do not forget to shutdown IPDB</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Please, notice <cite>ip.release()</cite> call in the end. Though it is
+not forced in an interactive python session for the better
+user experience, it is required in the scripts to sync the
+IPDB state before exit.</p>
+<p>IPDB supports functional-like syntax also:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+<span class="k">with</span> <span class="n">IPDB</span><span class="p">()</span> <span class="k">as</span> <span class="n">ipdb</span><span class="p">:</span>
+    <span class="n">intf</span> <span class="o">=</span> <span class="p">(</span><span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="p">[</span><span class="s1">&#39;eth0&#39;</span><span class="p">]</span>
+            <span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.2/24&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.3/24&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">set_address</span><span class="p">(</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">set_mtu</span><span class="p">(</span><span class="mi">1460</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="s1">&#39;external&#39;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">commit</span><span class="p">())</span>
+    <span class="c1"># ---&gt; &lt;--- here you have the interface reference with</span>
+    <span class="c1">#           all the changes applied: renamed, added ipaddr,</span>
+    <span class="c1">#           changed macaddr and mtu.</span>
+    <span class="o">...</span>  <span class="c1"># some code</span>
+
+<span class="c1"># pls notice, that the interface reference will not work</span>
+<span class="c1"># outside of `with IPDB() ...`</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="transaction-modes">
+<h2>Transaction modes<a class="headerlink" href="#transaction-modes" title="Permalink to this headline">¶</a></h2>
+<p>IPDB has several operating modes:</p>
+<blockquote>
+<div><ul>
+<li><dl class="first docutils">
+<dt>&#8216;implicit&#8217; (default) &#8211; the first change starts an implicit</dt>
+<dd><p class="first last">transaction, that have to be committed</p>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>&#8216;explicit&#8217; &#8211; you have to begin() a transaction prior to</dt>
+<dd><p class="first last">make any change</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+<p>The default is to use implicit transaction. This behaviour
+can be changed in the future, so use &#8216;mode&#8217; argument when
+creating IPDB instances.</p>
+<p>The sample session with explicit transactions:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">In</span> <span class="p">[</span><span class="mi">1</span><span class="p">]:</span> <span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">2</span><span class="p">]:</span> <span class="n">ip</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;explicit&#39;</span><span class="p">)</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">3</span><span class="p">]:</span> <span class="n">ifdb</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">interfaces</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">4</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">begin</span><span class="p">()</span>
+    <span class="n">Out</span><span class="p">[</span><span class="mi">3</span><span class="p">]:</span> <span class="n">UUID</span><span class="p">(</span><span class="s1">&#39;7a637a44-8935-4395-b5e7-0ce40d31d937&#39;</span><span class="p">)</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">5</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">up</span><span class="p">()</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">6</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">address</span> <span class="o">=</span> <span class="s1">&#39;00:11:22:33:44:55&#39;</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">7</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span> <span class="mi">24</span><span class="p">)</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">8</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.2&#39;</span><span class="p">,</span> <span class="mi">24</span><span class="p">)</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">9</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">review</span><span class="p">()</span>
+    <span class="n">Out</span><span class="p">[</span><span class="mi">8</span><span class="p">]:</span>
+    <span class="p">{</span><span class="s1">&#39;+ipaddr&#39;</span><span class="p">:</span> <span class="nb">set</span><span class="p">([(</span><span class="s1">&#39;10.0.0.2&#39;</span><span class="p">,</span> <span class="mi">24</span><span class="p">),</span> <span class="p">(</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span> <span class="mi">24</span><span class="p">)]),</span>
+     <span class="s1">&#39;-ipaddr&#39;</span><span class="p">:</span> <span class="nb">set</span><span class="p">([]),</span>
+     <span class="s1">&#39;address&#39;</span><span class="p">:</span> <span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">,</span>
+     <span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">4099</span><span class="p">}</span>
+<span class="n">In</span> <span class="p">[</span><span class="mi">10</span><span class="p">]:</span> <span class="n">ifdb</span><span class="o">.</span><span class="n">tap0</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Note, that you can <cite>review()</cite> the <cite>current_tx</cite> transaction,
+and <cite>commit()</cite> or <cite>drop()</cite> it. Also, multiple transactions
+are supported, use uuid returned by <cite>begin()</cite> to identify
+them.</p>
+<p>Actually, the form like &#8216;ip.tap0.address&#8217; is an eye-candy.
+The IPDB objects are dictionaries, so you can write the code
+above as that:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="p">[</span><span class="s1">&#39;tap0&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">down</span><span class="p">()</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="p">[</span><span class="s1">&#39;tap0&#39;</span><span class="p">][</span><span class="s1">&#39;address&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;00:11:22:33:44:55&#39;</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="context-managers">
+<h2>Context managers<a class="headerlink" href="#context-managers" title="Permalink to this headline">¶</a></h2>
+<p>Transactional objects (interfaces, routes) can act as context
+managers in the same way as IPDB does itself:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">tap0</span> <span class="k">as</span> <span class="n">i</span><span class="p">:</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">address</span> <span class="o">=</span> <span class="s1">&#39;00:11:22:33:44:55&#39;</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">ifname</span> <span class="o">=</span> <span class="s1">&#39;vpn&#39;</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span> <span class="mi">24</span><span class="p">)</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span> <span class="mi">24</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>On exit, the context manager will authomatically <cite>commit()</cite>
+the transaction.</p>
+</div>
+<div class="section" id="create-interfaces">
+<h2>Create interfaces<a class="headerlink" href="#create-interfaces" title="Permalink to this headline">¶</a></h2>
+<p>IPDB can also create virtual interfaces:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s1">&#39;bridge&#39;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;control&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">i</span><span class="p">:</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">add_port</span><span class="p">(</span><span class="n">ip</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">eth1</span><span class="p">)</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">add_port</span><span class="p">(</span><span class="n">ip</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">eth2</span><span class="p">)</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;10.0.0.1/24&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <cite>IPDB.create()</cite> call has the same syntax as
+<cite>IPRoute.link(&#8216;add&#8217;, ...)</cite>, except you shouldn&#8217;t specify
+the <cite>&#8216;add&#8217;</cite> command. Refer to <cite>IPRoute</cite> docs for details.</p>
+</div>
+<div class="section" id="bridge-interfaces">
+<h2>Bridge interfaces<a class="headerlink" href="#bridge-interfaces" title="Permalink to this headline">¶</a></h2>
+<p>Modern kernels provide possibility to manage bridge
+interface properties such as STP, forward delay, ageing
+time etc. Names of these properties start with <cite>br_</cite>, like
+<cite>br_ageing_time</cite>, <cite>br_forward_delay</cite> e.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">(</span><span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">virbr0</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;br_&#39;</span><span class="p">)]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="ports-management">
+<h2>Ports management<a class="headerlink" href="#ports-management" title="Permalink to this headline">¶</a></h2>
+<p>IPDB provides a uniform API to manage ports:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="p">[</span><span class="s1">&#39;br-int&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">br</span><span class="p">:</span>
+    <span class="n">br</span><span class="o">.</span><span class="n">add_port</span><span class="p">(</span><span class="s1">&#39;veth0&#39;</span><span class="p">)</span>
+    <span class="n">br</span><span class="o">.</span><span class="n">add_port</span><span class="p">(</span><span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">veth1</span><span class="p">)</span>
+    <span class="n">br</span><span class="o">.</span><span class="n">add_port</span><span class="p">(</span><span class="mi">700</span><span class="p">)</span>
+    <span class="n">br</span><span class="o">.</span><span class="n">del_port</span><span class="p">(</span><span class="s1">&#39;veth2&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Both <cite>add_port()</cite> and <cite>del_port()</cite> accept three types of arguments:</p>
+<blockquote>
+<div><ul class="simple">
+<li><cite>&#8216;veth0&#8217;</cite> &#8211; interface name as a string</li>
+<li><cite>ipdb.interfaces.veth1</cite> &#8211; IPDB interface object</li>
+<li><cite>700</cite> &#8211; interface index, an integer</li>
+</ul>
+</div></blockquote>
+<p>The same methods are used to manage bridge, bond and vrf ports.</p>
+</div>
+<div class="section" id="routes-management">
+<h2>Routes management<a class="headerlink" href="#routes-management" title="Permalink to this headline">¶</a></h2>
+<p>IPDB has a simple yet useful routing management interface.</p>
+<div class="section" id="create-a-route">
+<h3>Create a route<a class="headerlink" href="#create-a-route" title="Permalink to this headline">¶</a></h3>
+<p>To add a route, there is an easy to use syntax:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># spec as a dictionary</span>
+<span class="n">spec</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;dst&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;oif&#39;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;192.168.122.60&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;metrics&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;mtu&#39;</span><span class="p">:</span> <span class="mi">1400</span><span class="p">,</span>
+                    <span class="s1">&#39;advmss&#39;</span><span class="p">:</span> <span class="mi">500</span><span class="p">}}</span>
+
+<span class="c1"># pass spec as is</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+<span class="c1"># pass spec as kwargs</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="o">**</span><span class="n">spec</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+<span class="c1"># use keyword arguments explicitly</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">,</span> <span class="n">oif</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Please notice, that the device can be specified with <cite>oif</cite>
+(output interface) or <cite>iif</cite> (input interface), the <cite>device</cite>
+keyword is not supported anymore.</p>
+</div>
+<div class="section" id="get-a-route">
+<h3>Get a route<a class="headerlink" href="#get-a-route" title="Permalink to this headline">¶</a></h3>
+<p>To access and change the routes, one can use notations as
+follows:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># default table (254)</span>
+<span class="c1">#</span>
+<span class="c1"># change the route gateway and mtu</span>
+<span class="c1">#</span>
+<span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">route</span><span class="p">:</span>
+    <span class="n">route</span><span class="o">.</span><span class="n">gateway</span> <span class="o">=</span> <span class="s1">&#39;192.168.122.60&#39;</span>
+    <span class="n">route</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">mtu</span> <span class="o">=</span> <span class="mi">1500</span>
+
+<span class="c1"># access the default route</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;default])</span>
+
+<span class="c1"># change the default gateway</span>
+<span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">route</span><span class="p">:</span>
+    <span class="n">route</span><span class="o">.</span><span class="n">gateway</span> <span class="o">=</span> <span class="s1">&#39;10.0.0.1&#39;</span>
+</pre></div>
+</div>
+<p>By default, the path <cite>ipdb.routes</cite> reflects only the main
+routing table (254). But Linux supports much more routing
+tables, so does IPDB:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">In</span> <span class="p">[</span><span class="mi">1</span><span class="p">]:</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">tables</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+<span class="n">Out</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">254</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+
+<span class="n">In</span> <span class="p">[</span><span class="mi">2</span><span class="p">]:</span> <span class="nb">len</span><span class="p">(</span><span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">tables</span><span class="p">[</span><span class="mi">255</span><span class="p">])</span>
+<span class="n">Out</span><span class="p">[</span><span class="mi">2</span><span class="p">]:</span> <span class="mi">11</span>  <span class="c1"># =&gt; 11 automatic routes in the table local</span>
+</pre></div>
+</div>
+<p>It is important to understand, that routing tables keys in
+IPDB are not only the destination prefix. The key consists
+of &#8216;prefix/mask&#8217; string and the route priority (if any):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">In</span> <span class="p">[</span><span class="mi">1</span><span class="p">]:</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">tables</span><span class="p">[</span><span class="mi">254</span><span class="p">]</span><span class="o">.</span><span class="n">idx</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+<span class="n">Out</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+<span class="p">[</span><span class="n">RouteKey</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="s1">&#39;default&#39;</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">600</span><span class="p">),</span>
+ <span class="n">RouteKey</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.1.0.0/24&#39;</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">600</span><span class="p">),</span>
+ <span class="n">RouteKey</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="s1">&#39;192.168.122.0/24&#39;</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="kc">None</span><span class="p">)]</span>
+</pre></div>
+</div>
+<p>But a routing table in IPDB allows several variants of the
+route spec. The simplest case is to retrieve a route by
+prefix, if there is only one match:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># get route by prefix</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">]</span>
+
+<span class="c1"># get route by a special name</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;default&#39;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If there are more than one route that matches the spec, only
+the first one will be retrieved. One should iterate all the
+records and filter by a key to retrieve all matches:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># only one route will be retrieved</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;fe80::/64&#39;</span><span class="p">]</span>
+
+<span class="c1"># get all routes by this prefix</span>
+<span class="p">[</span> <span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span> <span class="k">if</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;dst&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;fe80::/64&#39;</span> <span class="p">]</span>
+</pre></div>
+</div>
+<p>It is also possible to use dicts as specs:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[{</span><span class="s1">&#39;dst&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.0.0/16&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;oif&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="route-metrics">
+<h3>Route metrics<a class="headerlink" href="#route-metrics" title="Permalink to this headline">¶</a></h3>
+<p>A special object is dedicated to route metrics, one can
+access it via <cite>route.metrics</cite> or <cite>route[&#8216;metrics&#8217;]</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># these two statements are equal:</span>
+<span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">route</span><span class="p">:</span>
+    <span class="n">route</span><span class="p">[</span><span class="s1">&#39;metrics&#39;</span><span class="p">][</span><span class="s1">&#39;mtu&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1400</span>
+
+<span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">route</span><span class="p">:</span>
+    <span class="n">route</span><span class="o">.</span><span class="n">metrics</span><span class="o">.</span><span class="n">mtu</span> <span class="o">=</span> <span class="mi">1400</span>
+</pre></div>
+</div>
+<p>Possible metrics are defined in <cite>rtmsg.py:rtmsg.metrics</cite>,
+e.g. <cite>RTAX_HOPLIMIT</cite> means <cite>hoplimit</cite> metric etc.</p>
+</div>
+<div class="section" id="multipath-routing">
+<h3>Multipath routing<a class="headerlink" href="#multipath-routing" title="Permalink to this headline">¶</a></h3>
+<p>Multipath nexthops are managed via <cite>route.add_nh()</cite> and
+<cite>route.del_nh()</cite> methods. They are available to review via
+<cite>route.multipath</cite>, but one should not directly
+add/remove/modify nexthops in <cite>route.multipath</cite>, as the
+changes will not be committed correctly.</p>
+<p>To create a multipath route:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">add</span><span class="p">({</span><span class="s1">&#39;dst&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.232.0/24&#39;</span><span class="p">,</span>
+                 <span class="s1">&#39;multipath&#39;</span><span class="p">:</span> <span class="p">[{</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.2&#39;</span><span class="p">,</span>
+                                <span class="s1">&#39;hops&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">},</span>
+                               <span class="p">{</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.3&#39;</span><span class="p">,</span>
+                                <span class="s1">&#39;hops&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+                               <span class="p">{</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.4&#39;</span><span class="p">}]})</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>To change a multipath route:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.232.0/24&#39;</span><span class="p">]</span> <span class="k">as</span> <span class="n">r</span><span class="p">:</span>
+    <span class="n">r</span><span class="o">.</span><span class="n">add_nh</span><span class="p">({</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.5&#39;</span><span class="p">})</span>
+    <span class="n">r</span><span class="o">.</span><span class="n">del_nh</span><span class="p">({</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.4&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>Another possible way is to create a normal route and turn
+it into multipath by <cite>add_nh()</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># create a non-MP route with one gateway:</span>
+<span class="p">(</span><span class="n">ipdb</span>
+ <span class="o">.</span><span class="n">routes</span>
+ <span class="o">.</span><span class="n">add</span><span class="p">({</span><span class="s1">&#39;dst&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.232.0/24&#39;</span><span class="p">,</span>
+       <span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.2&#39;</span><span class="p">})</span>
+ <span class="o">.</span><span class="n">commit</span><span class="p">())</span>
+
+<span class="c1"># turn it to become a MP route:</span>
+<span class="p">(</span><span class="n">ipdb</span>
+ <span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.232.0/24&#39;</span><span class="p">]</span>
+ <span class="o">.</span><span class="n">add_nh</span><span class="p">({</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.3&#39;</span><span class="p">})</span>
+ <span class="o">.</span><span class="n">commit</span><span class="p">())</span>
+
+<span class="c1"># here the route will contain two NH records, with</span>
+<span class="c1"># gateways 172.16.231.2 and 172.16.231.3</span>
+
+<span class="c1"># remove one NH and turn the route to be a normal one</span>
+<span class="p">(</span><span class="n">ipdb</span>
+ <span class="o">.</span><span class="n">routes</span><span class="p">[</span><span class="s1">&#39;172.16.232.0/24&#39;</span><span class="p">]</span>
+ <span class="o">.</span><span class="n">del_nh</span><span class="p">({</span><span class="s1">&#39;gateway&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.231.2&#39;</span><span class="p">})</span>
+ <span class="o">.</span><span class="n">commit</span><span class="p">())</span>
+
+<span class="c1"># thereafter the traffic to 172.16.232.0/24 will go only</span>
+<span class="c1"># via 172.16.231.3</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="differences-from-the-iproute2-syntax">
+<h3>Differences from the iproute2 syntax<a class="headerlink" href="#differences-from-the-iproute2-syntax" title="Permalink to this headline">¶</a></h3>
+<p>By historical reasons, <cite>iproute2</cite> uses names that differs
+from what the kernel uses. E.g., <cite>iproute2</cite> uses <cite>weight</cite>
+for multipath route hops instead of <cite>hops</cite>, where
+<cite>weight == (hops + 1)</cite>. Thus, a route created with
+<cite>hops == 2</cite> will be listed by <cite>iproute2</cite> as <cite>weight 3</cite>.</p>
+<p>Another significant difference is <cite>metrics</cite>. The <cite>pyroute2</cite>
+library uses the kernel naming scheme, where <cite>metrics</cite> means
+mtu, rtt, window etc. The <cite>iproute2</cite> utility uses <cite>metric</cite>
+(not <cite>metrics</cite>) as a name for the <cite>priority</cite> field.</p>
+<p>In examples:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span># -------------------------------------------------------
+# iproute2 command:
+$ ip route add default \
+    nexthop via 172.16.0.1 weight 2 \
+    nexthop via 172.16.0.2 weight 9
+
+# pyroute2 code:
+(ipdb
+ .routes
+ .add({&#39;dst&#39;: &#39;default&#39;,
+       &#39;multipath&#39;: [{&#39;gateway&#39;: &#39;172.16.0.1&#39;, &#39;hops&#39;: 1},
+                     {&#39;gateway&#39;: &#39;172.16.0.2&#39;, &#39;hops&#39;: 8}])
+ .commit())
+
+# -------------------------------------------------------
+# iproute2 command:
+$ ip route add default via 172.16.0.2 metric 200
+
+# pyroute2 code:
+(ipdb
+ .routes
+ .add({&#39;dst&#39;: &#39;default&#39;,
+       &#39;gateway&#39;: &#39;172.16.0.2&#39;,
+       &#39;priority&#39;: 200})
+ .commit())
+
+# -------------------------------------------------------
+# iproute2 command:
+$ ip route add default via 172.16.0.2 mtu 1460
+
+# pyroute2 code:
+(ipdb
+ .routes
+ .add({&#39;dst&#39;: &#39;default&#39;,
+       &#39;gateway&#39;: &#39;172.16.0.2&#39;,
+       &#39;metrics&#39;: {&#39;mtu&#39;: 1460}})
+ .commit())
+</pre></div>
+</div>
+</div>
+<div class="section" id="multipath-default-routes">
+<h3>Multipath default routes<a class="headerlink" href="#multipath-default-routes" title="Permalink to this headline">¶</a></h3>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">As of the merge of kill_rtcache into the kernel, and it&#8217;s
+release in ~3.6, weighted default routes no longer work
+in Linux.</p>
+</div>
+<p>Please refer to
+<a class="reference external" href="https://github.com/svinota/pyroute2/issues/171#issuecomment-149297244">https://github.com/svinota/pyroute2/issues/171#issuecomment-149297244</a>
+for details.</p>
+</div>
+</div>
+<div class="section" id="rules-management">
+<h2>Rules management<a class="headerlink" href="#rules-management" title="Permalink to this headline">¶</a></h2>
+<p>IPDB provides a basic IP rules management system.</p>
+<div class="section" id="create-a-rule">
+<h3>Create a rule<a class="headerlink" href="#create-a-rule" title="Permalink to this headline">¶</a></h3>
+<p>Syntax is almost the same as for routes:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># rule spec</span>
+<span class="n">spec</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;src&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.1.0/24&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;table&#39;</span><span class="p">:</span> <span class="mi">200</span><span class="p">,</span>
+        <span class="s1">&#39;priority&#39;</span><span class="p">:</span> <span class="mi">15000</span><span class="p">}</span>
+
+<span class="n">ipdb</span><span class="o">.</span><span class="n">rules</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="get-a-rule">
+<h3>Get a rule<a class="headerlink" href="#get-a-rule" title="Permalink to this headline">¶</a></h3>
+<p>The way IPDB handles IP rules is almost the same as routes,
+but rule keys are more complicated &#8211; the Linux kernel
+doesn&#8217;t use keys for rules, but instead iterates all the
+records until the first one w/o any attribute mismatch.</p>
+<p>The fields that the kernel uses to compare rules, IPDB uses
+as the key fields (see <cite>pyroute2/ipdb/rule.py:RuleKey</cite>)</p>
+<p>There are also more ways to find a record, as with routes:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># 1. iterate all the records</span>
+<span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">rules</span><span class="p">:</span>
+    <span class="n">match</span><span class="p">(</span><span class="n">record</span><span class="p">)</span>
+
+<span class="c1"># 2. an integer as the key matches the first</span>
+<span class="c1">#    rule with that priority</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">rules</span><span class="p">[</span><span class="mi">32565</span><span class="p">]</span>
+
+<span class="c1"># 3. a dict as the key returns the first match</span>
+<span class="c1">#    for all the specified attrs</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">rules</span><span class="p">[{</span><span class="s1">&#39;dst&#39;</span><span class="p">:</span> <span class="s1">&#39;10.0.0.0/24&#39;</span><span class="p">,</span> <span class="s1">&#39;table&#39;</span><span class="p">:</span> <span class="mi">200</span><span class="p">}]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="priorities">
+<h3>Priorities<a class="headerlink" href="#priorities" title="Permalink to this headline">¶</a></h3>
+<p>Thus, the rule priority is <strong>not</strong> a key, neither in the
+kernel, nor in IPDB. One should <strong>not</strong> rely on priorities
+as on keys, there may be several rules with the same
+priority, and it often happens, e.g. on Android systems.</p>
+</div>
+<div class="section" id="persistence">
+<h3>Persistence<a class="headerlink" href="#persistence" title="Permalink to this headline">¶</a></h3>
+<p>There is no <em>change</em> operation for the rule records in the
+kernel, so only <em>add/del</em> work. When IPDB changes a record,
+it effectively deletes the old one and creates the new with
+new parameters, but the object, referring the record, stays
+the same. Also that means, that IPDB can not recognize the
+situation, when someone else does the same. So if there is
+another program changing records by <em>del/add</em> operations,
+even another IPDB instance, referring objects in the IPDB
+will be recreated.</p>
+</div>
+</div>
+<div class="section" id="performance-issues">
+<h2>Performance issues<a class="headerlink" href="#performance-issues" title="Permalink to this headline">¶</a></h2>
+<p>In the case of bursts of Netlink broadcast messages, all
+the activity of the pyroute2-based code in the async mode
+becomes suppressed to leave more CPU resources to the
+packet reader thread. So please be ready to cope with
+delays in the case of Netlink broadcast storms. It means
+also, that IPDB state will be synchronized with OS also
+after some delay.</p>
+</div>
+<div class="section" id="the-class-api">
+<h2>The class API<a class="headerlink" href="#the-class-api" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyroute2.ipdb.main.IPDB">
+<em class="property">class </em><code class="descclassname">pyroute2.ipdb.main.</code><code class="descname">IPDB</code><span class="sig-paren">(</span><em>nl=None</em>, <em>mode='implicit'</em>, <em>restart_on_error=None</em>, <em>nl_async=None</em>, <em>nl_bind_groups=67372509</em>, <em>ignore_rtables=None</em>, <em>callbacks=None</em>, <em>sort_addresses=False</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipdb.main.IPDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>The class that maintains information about network setup
+of the host. Monitoring netlink events allows it to react
+immediately. It uses no polling.</p>
+<dl class="method">
+<dt id="pyroute2.ipdb.main.IPDB.register_callback">
+<code class="descname">register_callback</code><span class="sig-paren">(</span><em>callback</em>, <em>mode='post'</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipdb.main.IPDB.register_callback" title="Permalink to this definition">¶</a></dt>
+<dd><p>IPDB callbacks are routines executed on a RT netlink
+message arrival. There are two types of callbacks:
+&#8220;post&#8221; and &#8220;pre&#8221; callbacks.</p>
+<p>...</p>
+<p>&#8220;Post&#8221; callbacks are executed after the message is
+processed by IPDB and all corresponding objects are
+created or deleted. Using ipdb reference in &#8220;post&#8221;
+callbacks you will access the most up-to-date state
+of the IP database.</p>
+<p>&#8220;Post&#8221; callbacks are executed asynchronously in
+separate threads. These threads can work as long
+as you want them to. Callback threads are joined
+occasionally, so for a short time there can exist
+stopped threads.</p>
+<p>...</p>
+<p>&#8220;Pre&#8221; callbacks are synchronous routines, executed
+before the message gets processed by IPDB. It gives
+you the way to patch arriving messages, but also
+places a restriction: until the callback exits, the
+main event IPDB loop is blocked.</p>
+<p>Normally, only &#8220;post&#8221; callbacks are required. But in
+some specific cases &#8220;pre&#8221; also can be useful.</p>
+<p>...</p>
+<dl class="docutils">
+<dt>The routine, <cite>register_callback()</cite>, takes two arguments:</dt>
+<dd><ul class="first last simple">
+<li>callback function</li>
+<li>mode (optional, default=&#8221;post&#8221;)</li>
+</ul>
+</dd>
+</dl>
+<p>The callback should be a routine, that accepts three
+arguments:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">cb</span><span class="p">(</span><span class="n">ipdb</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">action</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Arguments are:</p>
+<blockquote>
+<div><ul>
+<li><dl class="first docutils">
+<dt><strong>ipdb</strong> is a reference to IPDB instance, that invokes</dt>
+<dd><p class="first last">the callback.</p>
+</dd>
+</dl>
+</li>
+<li><p class="first"><strong>msg</strong> is a message arrived</p>
+</li>
+<li><p class="first"><strong>action</strong> is just a msg[&#8216;event&#8217;] field</p>
+</li>
+</ul>
+</div></blockquote>
+<p>E.g., to work on a new interface, you should catch
+action == &#8216;RTM_NEWLINK&#8217; and with the interface index
+(arrived in msg[&#8216;index&#8217;]) get it from IPDB:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">index</span> <span class="o">=</span> <span class="n">msg</span><span class="p">[</span><span class="s1">&#39;index&#39;</span><span class="p">]</span>
+<span class="n">interface</span> <span class="o">=</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipdb.main.IPDB.release">
+<code class="descname">release</code><span class="sig-paren">(</span><em>complete=True</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipdb.main.IPDB.release" title="Permalink to this definition">¶</a></dt>
+<dd><p>Shutdown IPDB instance and sync the state. Since
+IPDB is asyncronous, some operations continue in the
+background, e.g. callbacks. So, prior to exit the
+script, it is required to properly shutdown IPDB.</p>
+<p>The shutdown sequence is not forced in an interactive
+python session, since it is easier for users and there
+is enough time to sync the state. But for the scripts
+the <cite>release()</cite> call is required.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">IPDB module</a><ul>
+<li><a class="reference internal" href="#ipdb-vs-iproute">IPDB vs. IPRoute</a></li>
+<li><a class="reference internal" href="#quickstart">Quickstart</a></li>
+<li><a class="reference internal" href="#transaction-modes">Transaction modes</a></li>
+<li><a class="reference internal" href="#context-managers">Context managers</a></li>
+<li><a class="reference internal" href="#create-interfaces">Create interfaces</a></li>
+<li><a class="reference internal" href="#bridge-interfaces">Bridge interfaces</a></li>
+<li><a class="reference internal" href="#ports-management">Ports management</a></li>
+<li><a class="reference internal" href="#routes-management">Routes management</a><ul>
+<li><a class="reference internal" href="#create-a-route">Create a route</a></li>
+<li><a class="reference internal" href="#get-a-route">Get a route</a></li>
+<li><a class="reference internal" href="#route-metrics">Route metrics</a></li>
+<li><a class="reference internal" href="#multipath-routing">Multipath routing</a></li>
+<li><a class="reference internal" href="#differences-from-the-iproute2-syntax">Differences from the iproute2 syntax</a></li>
+<li><a class="reference internal" href="#multipath-default-routes">Multipath default routes</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#rules-management">Rules management</a><ul>
+<li><a class="reference internal" href="#create-a-rule">Create a rule</a></li>
+<li><a class="reference internal" href="#get-a-rule">Get a rule</a></li>
+<li><a class="reference internal" href="#priorities">Priorities</a></li>
+<li><a class="reference internal" href="#persistence">Persistence</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#performance-issues">Performance issues</a></li>
+<li><a class="reference internal" href="#the-class-api">The class API</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="iproute.html"
+                        title="previous chapter">IPRoute module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="netns.html"
+                        title="next chapter">Netns management overview</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/ipdb.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="netns.html" title="Netns management overview"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="iproute.html" title="IPRoute module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

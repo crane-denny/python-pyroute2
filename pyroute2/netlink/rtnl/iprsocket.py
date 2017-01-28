@@ -1,90 +1,61 @@
 
+from pyroute2 import config
 from pyroute2.common import Namespace
 from pyroute2.common import AddrPool
 from pyroute2.proxy import NetlinkProxy
 from pyroute2.netlink import NETLINK_ROUTE
-from pyroute2.netlink.nlsocket import Marshal
 from pyroute2.netlink.nlsocket import NetlinkSocket
+from pyroute2.netlink.nlsocket import BatchSocket
 from pyroute2.netlink import rtnl
-from pyroute2.netlink.rtnl.tcmsg import tcmsg
-from pyroute2.netlink.rtnl.rtmsg import rtmsg
-from pyroute2.netlink.rtnl.ndmsg import ndmsg
-from pyroute2.netlink.rtnl.ndtmsg import ndtmsg
-from pyroute2.netlink.rtnl.fibmsg import fibmsg
-from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
-from pyroute2.netlink.rtnl.ifinfmsg import proxy_newlink
-from pyroute2.netlink.rtnl.ifinfmsg import proxy_setlink
-from pyroute2.netlink.rtnl.ifinfmsg import proxy_dellink
-from pyroute2.netlink.rtnl.ifinfmsg import proxy_linkinfo
-from pyroute2.netlink.rtnl.ifaddrmsg import ifaddrmsg
+from pyroute2.netlink.rtnl.marshal import MarshalRtnl
 
-
-class MarshalRtnl(Marshal):
-    msg_map = {rtnl.RTM_NEWLINK: ifinfmsg,
-               rtnl.RTM_DELLINK: ifinfmsg,
-               rtnl.RTM_GETLINK: ifinfmsg,
-               rtnl.RTM_SETLINK: ifinfmsg,
-               rtnl.RTM_NEWADDR: ifaddrmsg,
-               rtnl.RTM_DELADDR: ifaddrmsg,
-               rtnl.RTM_GETADDR: ifaddrmsg,
-               rtnl.RTM_NEWROUTE: rtmsg,
-               rtnl.RTM_DELROUTE: rtmsg,
-               rtnl.RTM_GETROUTE: rtmsg,
-               rtnl.RTM_NEWRULE: fibmsg,
-               rtnl.RTM_DELRULE: fibmsg,
-               rtnl.RTM_GETRULE: fibmsg,
-               rtnl.RTM_NEWNEIGH: ndmsg,
-               rtnl.RTM_DELNEIGH: ndmsg,
-               rtnl.RTM_GETNEIGH: ndmsg,
-               rtnl.RTM_NEWQDISC: tcmsg,
-               rtnl.RTM_DELQDISC: tcmsg,
-               rtnl.RTM_GETQDISC: tcmsg,
-               rtnl.RTM_NEWTCLASS: tcmsg,
-               rtnl.RTM_DELTCLASS: tcmsg,
-               rtnl.RTM_GETTCLASS: tcmsg,
-               rtnl.RTM_NEWTFILTER: tcmsg,
-               rtnl.RTM_DELTFILTER: tcmsg,
-               rtnl.RTM_GETTFILTER: tcmsg,
-               rtnl.RTM_NEWNEIGHTBL: ndtmsg,
-               rtnl.RTM_GETNEIGHTBL: ndtmsg,
-               rtnl.RTM_SETNEIGHTBL: ndtmsg}
-
-    def fix_message(self, msg):
-        # FIXME: pls do something with it
-        try:
-            msg['event'] = rtnl.RTM_VALUES[msg['header']['type']]
-        except:
-            pass
+if config.kernel < [3, 3, 0]:
+    from pyroute2.netlink.rtnl.ifinfmsg.compat import proxy_newlink
+    from pyroute2.netlink.rtnl.ifinfmsg.compat import proxy_setlink
+    from pyroute2.netlink.rtnl.ifinfmsg.compat import proxy_dellink
+    from pyroute2.netlink.rtnl.ifinfmsg.compat import proxy_linkinfo
+else:
+    from pyroute2.netlink.rtnl.ifinfmsg import proxy_newlink
+    from pyroute2.netlink.rtnl.ifinfmsg import proxy_setlink
 
 
 class IPRSocketMixin(object):
 
-    def __init__(self, fileno=None):
-        super(IPRSocketMixin, self).__init__(NETLINK_ROUTE, fileno=fileno)
+    def __init__(self, fileno=None, all_ns=False):
+        super(IPRSocketMixin, self).__init__(NETLINK_ROUTE, fileno=fileno,
+                                             all_ns=all_ns)
         self.marshal = MarshalRtnl()
         self._s_channel = None
         send_ns = Namespace(self, {'addr_pool': AddrPool(0x10000, 0x1ffff),
                                    'monitor': False})
-        recv_ns = Namespace(self, {'addr_pool': AddrPool(0x20000, 0x2ffff),
-                                   'monitor': False})
         self._sproxy = NetlinkProxy(policy='return', nl=send_ns)
         self._sproxy.pmap = {rtnl.RTM_NEWLINK: proxy_newlink,
-                             rtnl.RTM_SETLINK: proxy_setlink,
-                             rtnl.RTM_DELLINK: proxy_dellink}
-        self._rproxy = NetlinkProxy(policy='forward', nl=recv_ns)
-        self._rproxy.pmap = {rtnl.RTM_NEWLINK: proxy_linkinfo}
+                             rtnl.RTM_SETLINK: proxy_setlink}
+        if config.kernel < [3, 3, 0]:
+            self._recv_ns = Namespace(self,
+                                      {'addr_pool': AddrPool(0x20000, 0x2ffff),
+                                       'monitor': False})
+            self._sproxy.pmap[rtnl.RTM_DELLINK] = proxy_dellink
+            # inject proxy hooks into recv() and...
+            self.__recv = self._recv
+            self._recv = self._p_recv
+            # ... recv_into()
+            self._recv_ft = self.recv_ft
+            self.recv_ft = self._p_recv_ft
+
+    def clone(self):
+        return type(self)()
 
     def bind(self, groups=rtnl.RTNL_GROUPS, async=False):
         super(IPRSocketMixin, self).bind(groups, async=async)
 
-    ##
-    # proxy-ng protocol
-    #
-    def sendto(self, data, address):
-        ret = self._sproxy.handle(data)
+    def _gate(self, msg, addr):
+        msg.reset()
+        msg.encode()
+        ret = self._sproxy.handle(msg)
         if ret is not None:
             if ret['verdict'] == 'forward':
-                return self._sendto(ret['data'], address)
+                return self._sendto(ret['data'], addr)
             elif ret['verdict'] in ('return', 'error'):
                 if self._s_channel is not None:
                     return self._s_channel.send(ret['data'])
@@ -100,11 +71,11 @@ class IPRSocketMixin(object):
             else:
                 ValueError('Incorrect verdict')
 
-        return self._sendto(data, address)
+        return self._sendto(msg.data, addr)
 
-    def recv(self, bufsize, flags=0):
-        data = self._recv(bufsize, flags)
-        ret = self._rproxy.handle(data)
+    def _p_recv_ft(self, bufsize, flags=0):
+        data = self._recv_ft(bufsize, flags)
+        ret = proxy_linkinfo(data, self._recv_ns)
         if ret is not None:
             if ret['verdict'] in ('forward', 'error'):
                 return ret['data']
@@ -112,6 +83,21 @@ class IPRSocketMixin(object):
                 ValueError('Incorrect verdict')
 
         return data
+
+    def _p_recv(self, bufsize, flags=0):
+        data = self.__recv(bufsize, flags)
+        ret = proxy_linkinfo(data, self._recv_ns)
+        if ret is not None:
+            if ret['verdict'] in ('forward', 'error'):
+                return ret['data']
+            else:
+                ValueError('Incorrect verdict')
+
+        return data
+
+
+class IPBatchSocket(IPRSocketMixin, BatchSocket):
+    pass
 
 
 class IPRSocket(IPRSocketMixin, NetlinkSocket):

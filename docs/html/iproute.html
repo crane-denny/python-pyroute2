@@ -1,0 +1,1500 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>IPRoute module &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="IPDB module" href="ipdb.html" />
+    <link rel="prev" title="Quickstart" href="usage.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="ipdb.html" title="IPDB module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="usage.html" title="Quickstart"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-pyroute2.iproute">
+<span id="iproute-module"></span><h1>IPRoute module<a class="headerlink" href="#module-pyroute2.iproute" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="iproute-quickstart">
+<h2>IPRoute quickstart<a class="headerlink" href="#iproute-quickstart" title="Permalink to this headline">¶</a></h2>
+<p><strong>IPRoute</strong> in two words:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ sudo pip install pyroute2
+
+$ cat example.py
+from pyroute2 import IPRoute
+ip = IPRoute()
+print([x.get_attr(&#39;IFLA_IFNAME&#39;) for x in ip.get_links()])
+
+$ python example.py
+[&#39;lo&#39;, &#39;p6p1&#39;, &#39;wlan0&#39;, &#39;virbr0&#39;, &#39;virbr0-nic&#39;]
+</pre></div>
+</div>
+</div>
+<div class="section" id="responses">
+<h2>Responses<a class="headerlink" href="#responses" title="Permalink to this headline">¶</a></h2>
+<p>The pyroute2 netlink socket implementation is agnostic
+to the particular netlink protocols, and always returns
+a list of messages as the response to a request sent to
+the kernel:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># this request returns one match</span>
+<span class="n">eth0</span> <span class="o">=</span> <span class="n">ipr</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;eth0&#39;</span><span class="p">)</span>
+<span class="nb">len</span><span class="p">(</span><span class="n">eth0</span><span class="p">)</span>  <span class="c1"># -&gt; 1, if exists, else 0</span>
+
+<span class="c1"># but that one returns a set of</span>
+<span class="n">up</span> <span class="o">=</span> <span class="n">ipr</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">operstate</span><span class="o">=</span><span class="s1">&#39;UP&#39;</span><span class="p">)</span>
+<span class="nb">len</span><span class="p">(</span><span class="n">up</span><span class="p">)</span>  <span class="c1"># -&gt; k, where 0 &lt;= k &lt;= [interface count]</span>
+</pre></div>
+</div>
+<p>Thus, always expect a list in the response, running any
+<cite>IPRoute()</cite> netlink request.</p>
+<div class="section" id="nlmsg-error-responses">
+<h3>NLMSG_ERROR responses<a class="headerlink" href="#nlmsg-error-responses" title="Permalink to this headline">¶</a></h3>
+<p>Some kernel subsystems return <cite>NLMSG_ERROR</cite> in the response
+to any request. It is OK as long as
+<cite>nlmsg[&#8220;header&#8221;][&#8220;error&#8221;] is None</cite>. Otherwise an
+exception will be raised by the parser.</p>
+<p>So if instead of an exception you get a <cite>NLMSG_ERROR</cite> message,
+it means <cite>error == 0</cite>, the same as <cite>$? == 0</cite> in bash.</p>
+</div>
+<div class="section" id="how-to-work-with-messages">
+<h3>How to work with messages<a class="headerlink" href="#how-to-work-with-messages" title="Permalink to this headline">¶</a></h3>
+<p>Every netlink message contains header, fields and NLAs
+(netlink attributes). Every NLA is a netlink message...
+(see &#8220;recursion&#8221;).</p>
+<p>And the library provides parsed messages according to
+this scheme. Every RTNL message contains:</p>
+<ul class="simple">
+<li><cite>nlmsg[&#8216;header&#8217;]</cite> &#8211; parsed header</li>
+<li><cite>nlmsg[&#8216;attrs&#8217;]</cite> &#8211; NLA chain (parsed on demand)</li>
+<li>0 .. k data fields, e.g. <cite>nlmsg[&#8216;flags&#8217;]</cite> etc.</li>
+<li><cite>nlmsg.header</cite> &#8211; the header fields spec</li>
+<li><cite>nlmsg.fields</cite> &#8211; the data fields spec</li>
+<li><cite>nlmsg.nla_map</cite> &#8211; NLA spec</li>
+</ul>
+<p>An important parser feature is that NLAs are parsed
+on demand, when someone tries to access them. Otherwise
+the parser doesn&#8217;t waste CPU cycles.</p>
+<p>The NLA chain is a list-like structure, not a dictionary.
+The netlink standard doesn&#8217;t require NLAs to be unique
+within one message:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;__align&#39;</span><span class="p">:</span> <span class="p">(),</span>
+ <span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[(</span><span class="s1">&#39;IFLA_IFNAME&#39;</span><span class="p">,</span> <span class="s1">&#39;lo&#39;</span><span class="p">),</span>    <span class="c1"># [1]</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_TXQLEN&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_OPERSTATE&#39;</span><span class="p">,</span> <span class="s1">&#39;UNKNOWN&#39;</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_LINKMODE&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_MTU&#39;</span><span class="p">,</span> <span class="mi">65536</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_GROUP&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_PROMISCUITY&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_NUM_TX_QUEUES&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_NUM_RX_QUEUES&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+           <span class="p">(</span><span class="s1">&#39;IFLA_CARRIER&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+           <span class="o">...</span><span class="p">],</span>
+ <span class="s1">&#39;change&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;event&#39;</span><span class="p">:</span> <span class="s1">&#39;RTM_NEWLINK&#39;</span><span class="p">,</span>             <span class="c1"># [2]</span>
+ <span class="s1">&#39;family&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">65609</span><span class="p">,</span>
+ <span class="s1">&#39;header&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>           <span class="c1"># [3]</span>
+            <span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="s1">&#39;length&#39;</span><span class="p">:</span> <span class="mi">1180</span><span class="p">,</span>
+            <span class="s1">&#39;pid&#39;</span><span class="p">:</span> <span class="mi">28233</span><span class="p">,</span>
+            <span class="s1">&#39;sequence_number&#39;</span><span class="p">:</span> <span class="mi">257</span><span class="p">,</span>  <span class="c1"># [4]</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="mi">16</span><span class="p">},</span>             <span class="c1"># [5]</span>
+ <span class="s1">&#39;ifi_type&#39;</span><span class="p">:</span> <span class="mi">772</span><span class="p">,</span>
+ <span class="s1">&#39;index&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+
+ <span class="c1"># [1] every NLA is parsed upon access</span>
+ <span class="c1"># [2] this field is injected by the RTNL parser</span>
+ <span class="c1"># [3] if not None, an exception will be raised</span>
+ <span class="c1"># [4] more details in the netlink description</span>
+ <span class="c1"># [5] 16 == RTM_NEWLINK</span>
+</pre></div>
+</div>
+<p>To access fields:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">msg</span><span class="p">[</span><span class="s1">&#39;index&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>To access one NLA:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">msg</span><span class="o">.</span><span class="n">get_attr</span><span class="p">(</span><span class="s1">&#39;IFLA_CARRIER&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>When the NLA with the specified name is not present in the
+chain, <cite>get_attr()</cite> returns <cite>None</cite>. To get the list of all
+NLAs of that name, use <cite>get_attrs()</cite>. A real example with
+NLA hierarchy, take notice of <cite>get_attr()</cite> and
+<cite>get_attrs()</cite> usage:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># for macvlan interfaces there may be several</span>
+<span class="c1"># IFLA_MACVLAN_MACADDR NLA provided, so use</span>
+<span class="c1"># get_attrs() to get all the list, not only</span>
+<span class="c1"># the first one</span>
+
+<span class="p">(</span><span class="n">msg</span>
+ <span class="o">.</span><span class="n">get_attr</span><span class="p">(</span><span class="s1">&#39;IFLA_LINKINFO&#39;</span><span class="p">)</span>           <span class="c1"># one NLA</span>
+ <span class="o">.</span><span class="n">get_attr</span><span class="p">(</span><span class="s1">&#39;IFLA_INFO_DATA&#39;</span><span class="p">)</span>          <span class="c1"># one NLA</span>
+ <span class="o">.</span><span class="n">get_attrs</span><span class="p">(</span><span class="s1">&#39;IFLA_MACVLAN_MACADDR&#39;</span><span class="p">))</span>  <span class="c1"># a list of</span>
+</pre></div>
+</div>
+<p>Pls read carefully the message structure prior to start the
+coding.</p>
+</div>
+</div>
+<div class="section" id="threaded-vs-threadless-architecture">
+<h2>Threaded vs. threadless architecture<a class="headerlink" href="#threaded-vs-threadless-architecture" title="Permalink to this headline">¶</a></h2>
+<p>Since v0.3.2, IPRoute class is threadless by default.
+It spawns no additional threads, and receives only
+responses to own requests, no broadcast messages. So,
+if you prefer not to cope with implicit threading, you
+can safely use this module.</p>
+<p>To get broadcast messages, use <cite>IPRoute.bind()</cite> call.
+Please notice, that after calling <cite>IPRoute.bind()</cite> you
+MUST get all the messages in time. In the case of the
+kernel buffer overflow, you will have to restart the
+socket.</p>
+<p>With <cite>IPRoute.bind(async=True)</cite> one can launch async
+message receiver thread with <cite>Queue</cite>-based buffer. The
+buffer is thread-safe and completely transparent from
+the programmer&#8217;s perspective. Please read also
+<cite>NetlinkSocket</cite> documentation to know more about async
+mode.</p>
+</div>
+<div class="section" id="think-about-ipdb">
+<h2>Think about IPDB<a class="headerlink" href="#think-about-ipdb" title="Permalink to this headline">¶</a></h2>
+<p>If you plan to regularly fetch loads of objects, think
+about IPDB also. Unlike to IPRoute, IPDB does not fetch
+all the objects from OS every time you request them, but
+keeps a cache that is asynchronously updated by the netlink
+broadcasts. For a long-term running programs, that often
+retrieve info about hundreds or thousands of objects, it
+can be better to use IPDB as it will load CPU significantly
+less.</p>
+</div>
+<div class="section" id="api">
+<h2>API<a class="headerlink" href="#api" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyroute2.iproute.IPBatch">
+<em class="property">class </em><code class="descclassname">pyroute2.iproute.</code><code class="descname">IPBatch</code><span class="sig-paren">(</span><em>fileno=None</em>, <em>all_ns=False</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPBatch" title="Permalink to this definition">¶</a></dt>
+<dd><p>Netlink requests compiler. Does not send any requests, but
+instead stores them in the internal binary buffer. The
+contents of the buffer can be used to send batch requests,
+to test custom netlink parsers and so on.</p>
+<p>Uses <cite>IPRouteMixin</cite> and provides all the same API as normal
+<cite>IPRoute</cite> objects:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># create the batch compiler</span>
+<span class="n">ipb</span> <span class="o">=</span> <span class="n">IPBatch</span><span class="p">()</span>
+<span class="c1"># compile requests into the internal buffer</span>
+<span class="n">ipb</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">550</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;dummy&quot;</span><span class="p">)</span>
+<span class="n">ipb</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">550</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s2">&quot;up&quot;</span><span class="p">)</span>
+<span class="n">ipb</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">550</span><span class="p">,</span> <span class="n">address</span><span class="o">=</span><span class="s2">&quot;10.0.0.2&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+<span class="c1"># save the buffer</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">ipb</span><span class="o">.</span><span class="n">batch</span>
+<span class="c1"># reset the buffer</span>
+<span class="n">ipb</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="o">...</span>
+<span class="c1"># send the buffer</span>
+<span class="n">IPRoute</span><span class="p">()</span><span class="o">.</span><span class="n">sendto</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.iproute.IPRoute">
+<em class="property">class </em><code class="descclassname">pyroute2.iproute.</code><code class="descname">IPRoute</code><span class="sig-paren">(</span><em>fileno=None</em>, <em>all_ns=False</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRoute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Public class that provides RTNL API to the current network
+namespace.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.iproute.IPRouteMixin">
+<em class="property">class </em><code class="descclassname">pyroute2.iproute.</code><code class="descname">IPRouteMixin</code><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin" title="Permalink to this definition">¶</a></dt>
+<dd><p><cite>IPRouteMixin</cite> should not be instantiated by itself. It is intended
+to be used as a mixin class that provides RTNL API. Following classes
+use <cite>IPRouteMixin</cite>:</p>
+<ul class="simple">
+<li><cite>IPRoute</cite> &#8211; RTNL API to the current network namespace</li>
+<li><cite>NetNS</cite> &#8211; RTNL API to another network namespace</li>
+<li><cite>IPBatch</cite> &#8211; RTNL compiler</li>
+</ul>
+<p>It is an old-school API, that provides access to rtnetlink as is.
+It helps you to retrieve and change almost all the data, available
+through rtnetlink:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+<span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="c1"># create an interface</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;brx&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;bridge&#39;</span><span class="p">)</span>
+<span class="c1"># lookup the index</span>
+<span class="n">dev</span> <span class="o">=</span> <span class="n">ipr</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;brx&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="c1"># bring it down</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;set&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s1">&#39;down&#39;</span><span class="p">)</span>
+<span class="c1"># change the interface MAC address and rename it just for fun</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;set&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span>
+         <span class="n">address</span><span class="o">=</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">,</span>
+         <span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;br-ctrl&#39;</span><span class="p">)</span>
+<span class="c1"># add primary IP address</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span>
+         <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+         <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;10.0.0.255&#39;</span><span class="p">)</span>
+<span class="c1"># add secondary IP address</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span>
+         <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.0.0.2&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+         <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;10.0.0.255&#39;</span><span class="p">)</span>
+<span class="c1"># bring it up</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;set&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">dev</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s1">&#39;up&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.addr">
+<code class="descname">addr</code><span class="sig-paren">(</span><em>command</em>, <em>index=None</em>, <em>address=None</em>, <em>mask=None</em>, <em>family=None</em>, <em>scope=None</em>, <em>match=None</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.addr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Address operations</p>
+<ul class="simple">
+<li>command &#8211; add, delete</li>
+<li>index &#8211; device index</li>
+<li>address &#8211; IPv4 or IPv6 address</li>
+<li>mask &#8211; address mask</li>
+<li>family &#8211; socket.AF_INET for IPv4 or socket.AF_INET6 for IPv6</li>
+<li>scope &#8211; the address scope, see /etc/iproute2/rt_scopes</li>
+<li>**kwarg &#8211; any ifaddrmsg field or NLA</li>
+</ul>
+<p>Later the method signature will be changed to:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">addr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwarg</span><span class="p">):</span>
+    <span class="c1"># the method body</span>
+</pre></div>
+</div>
+<p>So only keyword arguments (except of the command) will be accepted.
+The reason for this change is an unification of API.</p>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">idx</span> <span class="o">=</span> <span class="mi">62</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span> <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span> <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.0.0.2&#39;</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>With more NLAs:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># explicitly set broadcast address</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+        <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.0.0.3&#39;</span><span class="p">,</span>
+        <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;10.0.0.255&#39;</span><span class="p">,</span>
+        <span class="n">prefixlen</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+
+<span class="c1"># make the secondary address visible to ifconfig: add label</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+        <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.0.0.4&#39;</span><span class="p">,</span>
+        <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;10.0.0.255&#39;</span><span class="p">,</span>
+        <span class="n">prefixlen</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+        <span class="n">label</span><span class="o">=</span><span class="s1">&#39;eth0:1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Configure p2p address on an interface:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+        <span class="n">address</span><span class="o">=</span><span class="s1">&#39;10.1.1.2&#39;</span><span class="p">,</span>
+        <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+        <span class="n">local</span><span class="o">=</span><span class="s1">&#39;10.1.1.1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.fdb">
+<code class="descname">fdb</code><span class="sig-paren">(</span><em>command</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.fdb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bridge forwarding database management.</p>
+<dl class="docutils">
+<dt>More details:</dt>
+<dd><ul class="first last simple">
+<li>kernel:Documentation/networking/switchdev.txt</li>
+<li>pyroute2.netlink.rtnl.ndmsg</li>
+</ul>
+</dd>
+</dl>
+<p><strong>add</strong></p>
+<p>Add a new FDB record. Works in the same way as ARP cache
+management, but some additional NLAs can be used:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># simple FDB record</span>
+<span class="c1">#</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+       <span class="n">ifindex</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;br0&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+       <span class="n">lladdr</span><span class="o">=</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">,</span>
+       <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">)</span>
+
+<span class="c1"># specify vlan</span>
+<span class="c1"># NB: vlan should exist on the device, use</span>
+<span class="c1"># `vlan_filter()`</span>
+<span class="c1">#</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+       <span class="n">ifindex</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;br0&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+       <span class="n">lladdr</span><span class="o">=</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">,</span>
+       <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span>
+       <span class="n">vlan</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+
+<span class="c1"># specify vxlan id and port</span>
+<span class="c1"># NB: works only for vxlan devices, use</span>
+<span class="c1"># `link(&quot;add&quot;, kind=&quot;vxlan&quot;, ...)`</span>
+<span class="c1">#</span>
+<span class="c1"># if port is not specified, the default one is used</span>
+<span class="c1"># by the kernel.</span>
+<span class="c1">#</span>
+<span class="c1"># if vni (vxlan id) is equal to the device vni,</span>
+<span class="c1"># the kernel doesn&#39;t report it back</span>
+<span class="c1">#</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+       <span class="n">ifindex</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;vx500&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+       <span class="n">lladdr</span><span class="o">=</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">,</span>
+       <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">,</span>
+       <span class="n">port</span><span class="o">=</span><span class="mi">5678</span><span class="p">,</span>
+       <span class="n">vni</span><span class="o">=</span><span class="mi">600</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>append</strong></p>
+<p>Append a new FDB record. The same syntax as for <strong>add</strong>.</p>
+<p><strong>del</strong></p>
+<p>Remove an existing FDB record. The same syntax as for <strong>add</strong>.</p>
+<p><strong>dump</strong></p>
+<p>Dump all the FDB records. If any <cite>**kwarg</cite> is provided,
+results will be filtered:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># dump all the records</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;dump&#39;</span><span class="p">)</span>
+
+<span class="c1"># show only specific lladdr, dst, vlan etc.</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;dump&#39;</span><span class="p">,</span> <span class="n">lladdr</span><span class="o">=</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;dump&#39;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.0.0.1&#39;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">fdb</span><span class="p">(</span><span class="s1">&#39;dump&#39;</span><span class="p">,</span> <span class="n">vlan</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.flush_addr">
+<code class="descname">flush_addr</code><span class="sig-paren">(</span><em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.flush_addr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Flush IP addresses.</p>
+<p>Examples:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># flush all addresses on the interface with index 2:</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">flush_addr</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="c1"># flush all addresses with IFA_LABEL=&#39;eth0&#39;:</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">flush_addr</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;eth0&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.flush_routes">
+<code class="descname">flush_routes</code><span class="sig-paren">(</span><em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.flush_routes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Flush routes &#8211; purge route records from a table.
+Arguments are the same as for <cite>get_routes()</cite>
+routine. Actually, this routine implements a pipe from
+<cite>get_routes()</cite> to <cite>nlm_request()</cite>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.flush_rules">
+<code class="descname">flush_rules</code><span class="sig-paren">(</span><em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.flush_rules" title="Permalink to this definition">¶</a></dt>
+<dd><p>Flush rules. Please keep in mind, that by default the function
+operates on <strong>all</strong> rules of <strong>all</strong> families. To work only on
+IPv4 rules, one should explicitly specify <cite>family=AF_INET</cite>.</p>
+<p>Examples:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># flush all IPv4 rule with priorities above 5 and below 32000</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">flush_rules</span><span class="p">(</span><span class="n">family</span><span class="o">=</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="mi">5</span> <span class="o">&lt;</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">32000</span><span class="p">)</span>
+
+<span class="c1"># flush all IPv6 rules that point to table 250:</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">flush_rules</span><span class="p">(</span><span class="n">family</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET6</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_addr">
+<code class="descname">get_addr</code><span class="sig-paren">(</span><em>family=0</em>, <em>match=None</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_addr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dump addresses.</p>
+<p>If family is not specified, both AF_INET and AF_INET6 addresses
+will be dumped:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># get all addresses</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_addr</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>It is possible to apply filters on the results:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># get addresses for the 2nd interface</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_addr</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="c1"># get addresses with IFA_LABEL == &#39;eth0&#39;</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_addr</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s1">&#39;eth0&#39;</span><span class="p">)</span>
+
+<span class="c1"># get all the subnet addresses on the interface, identified</span>
+<span class="c1"># by broadcast address (should be explicitly specified upon</span>
+<span class="c1"># creation)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_addr</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;192.168.1.255&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A custom predicate can be used as a filter:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">get_addr</span><span class="p">(</span><span class="n">match</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;index&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_classes">
+<code class="descname">get_classes</code><span class="sig-paren">(</span><em>index=0</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_classes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get classes for specified interface.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_default_routes">
+<code class="descname">get_default_routes</code><span class="sig-paren">(</span><em>family=0</em>, <em>table=254</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_default_routes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get default routes</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_filters">
+<code class="descname">get_filters</code><span class="sig-paren">(</span><em>index=0</em>, <em>handle=0</em>, <em>parent=0</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_filters" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get filters for specified interface, handle and parent.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_links">
+<code class="descname">get_links</code><span class="sig-paren">(</span><em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_links" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get network interfaces.</p>
+<p>By default returns all interfaces. Arguments vector
+can contain interface indices or a special keyword
+&#8216;all&#8217;:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">get_links</span><span class="p">()</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_links</span><span class="p">(</span><span class="s1">&#39;all&#39;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_links</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+
+<span class="n">interfaces</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_links</span><span class="p">(</span><span class="o">*</span><span class="n">interfaces</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_neighbors">
+<code class="descname">get_neighbors</code><span class="sig-paren">(</span><em>family=0</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_neighbors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias of <cite>get_neighbours()</cite>, deprecated.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_neighbours">
+<code class="descname">get_neighbours</code><span class="sig-paren">(</span><em>family=0</em>, <em>match=None</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_neighbours" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dump ARP cache records.</p>
+<p>The <cite>family</cite> keyword sets the family for the request:
+e.g. <cite>AF_INET</cite> or <cite>AF_INET6</cite> for arp cache, <cite>AF_BRIDGE</cite>
+for fdb.</p>
+<p>If other keyword arguments not empty, they are used as
+filter. Also, one can explicitly set filter as a function
+with the <cite>match</cite> parameter.</p>
+<p>Examples:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># get neighbours on the 3rd link:</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_neighbours</span><span class="p">(</span><span class="n">ifindex</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="c1"># get a particular record by dst:</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_neighbours</span><span class="p">(</span><span class="n">dst</span><span class="o">=</span><span class="s1">&#39;172.16.0.1&#39;</span><span class="p">)</span>
+
+<span class="c1"># get fdb records:</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_neighbours</span><span class="p">(</span><span class="n">AF_BRIDGE</span><span class="p">)</span>
+
+<span class="c1"># and filter them by a function:</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_neighbours</span><span class="p">(</span><span class="n">AF_BRIDGE</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s1">&#39;state&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_ntables">
+<code class="descname">get_ntables</code><span class="sig-paren">(</span><em>family=0</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_ntables" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get neighbour tables</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_qdiscs">
+<code class="descname">get_qdiscs</code><span class="sig-paren">(</span><em>index=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_qdiscs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get all queue disciplines for all interfaces or for specified
+one.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_routes">
+<code class="descname">get_routes</code><span class="sig-paren">(</span><em>family=0</em>, <em>match=None</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_routes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get all routes. You can specify the table. There
+are 255 routing classes (tables), and the kernel
+returns all the routes on each request. So the
+routine filters routes from full output.</p>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">get_routes</span><span class="p">()</span>  <span class="c1"># get all the routes for all families</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_routes</span><span class="p">(</span><span class="n">family</span><span class="o">=</span><span class="n">AF_INET6</span><span class="p">)</span>  <span class="c1"># get only IPv6 routes</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">get_routes</span><span class="p">(</span><span class="n">table</span><span class="o">=</span><span class="mi">254</span><span class="p">)</span>  <span class="c1"># get routes from 254 table</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_rules">
+<code class="descname">get_rules</code><span class="sig-paren">(</span><em>family=0</em>, <em>match=None</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_rules" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get all rules. By default return all rules. To explicitly
+request the IPv4 rules use <cite>family=AF_INET</cite>.</p>
+<dl class="docutils">
+<dt>Example::</dt>
+<dd>ip.get_rules() # get all the rules for all families
+ip.get_rules(family=AF_INET6)  # get only IPv6 rules</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.get_vlans">
+<code class="descname">get_vlans</code><span class="sig-paren">(</span><em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.get_vlans" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dump available vlan info on bridge ports</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.link">
+<code class="descname">link</code><span class="sig-paren">(</span><em>command</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.link" title="Permalink to this definition">¶</a></dt>
+<dd><p>Link operations.</p>
+<dl class="docutils">
+<dt>Keywords to set up ifinfmsg fields:</dt>
+<dd><ul class="first last simple">
+<li>index &#8211; interface index</li>
+<li>family &#8211; AF_BRIDGE for bridge operations, otherwise 0</li>
+<li>flags &#8211; device flags</li>
+<li>change &#8211; change mask</li>
+</ul>
+</dd>
+</dl>
+<p>All other keywords will be translated to NLA names, e.g.
+<cite>mtu -&gt; IFLA_MTU</cite>, <cite>af_spec -&gt; IFLA_AF_SPEC</cite> etc. You can
+provide a complete NLA structure or let filters do it for
+you. E.g., these pairs show equal statements:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># set device MTU</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">mtu</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">IFLA_MTU</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+
+<span class="c1"># add vlan device</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;dummy&quot;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span>
+        <span class="n">IFLA_LINKINFO</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;IFLA_INFO_KIND&#39;</span><span class="p">,</span> <span class="s1">&#39;dummy&#39;</span><span class="p">]]})</span>
+</pre></div>
+</div>
+<p>Filters are implemented in the <cite>pyroute2.netlink.rtnl.req</cite> module.
+You can contribute your own if you miss shortcuts.</p>
+<p>Commands:</p>
+<p><strong>add</strong></p>
+<p>To create an interface, one should specify the interface kind:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;dummy&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The kind can be any of those supported by kernel. It can be
+<cite>dummy</cite>, <cite>bridge</cite>, <cite>bond</cite> etc. On modern kernels one can specify
+even interface index:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br-test&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;bridge&quot;</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="mi">2345</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Specific type notes:</p>
+<p>► gre</p>
+<p>Create GRE tunnel:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;grex&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;gre&quot;</span><span class="p">,</span>
+        <span class="n">gre_local</span><span class="o">=</span><span class="s2">&quot;172.16.0.1&quot;</span><span class="p">,</span>
+        <span class="n">gre_remote</span><span class="o">=</span><span class="s2">&quot;172.16.0.101&quot;</span><span class="p">,</span>
+        <span class="n">gre_ttl</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The keyed GRE requires explicit iflags/oflags specification:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;grex&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;gre&quot;</span><span class="p">,</span>
+        <span class="n">gre_local</span><span class="o">=</span><span class="s2">&quot;172.16.0.1&quot;</span><span class="p">,</span>
+        <span class="n">gre_remote</span><span class="o">=</span><span class="s2">&quot;172.16.0.101&quot;</span><span class="p">,</span>
+        <span class="n">gre_ttl</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+        <span class="n">gre_ikey</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">gre_okey</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">gre_iflags</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+        <span class="n">gre_oflags</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Support for GRE over IPv6 is also included; use <cite>kind=ip6gre</cite> and
+<cite>ip6gre_</cite> as the prefix for its values.</p>
+<p>► macvlan</p>
+<p>Macvlan interfaces act like VLANs within OS. The macvlan driver
+provides an ability to add several MAC addresses on one interface,
+where every MAC address is reflected with a virtual interface in
+the system.</p>
+<p>In some setups macvlan interfaces can replace bridge interfaces,
+providing more simple and at the same time high-performance
+solution:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;mvlan0&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;macvlan&quot;</span><span class="p">,</span>
+        <span class="n">link</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;em1&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">macvlan_mode</span><span class="o">=</span><span class="s2">&quot;private&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Several macvlan modes are available: &#8220;private&#8221;, &#8220;vepa&#8221;, &#8220;bridge&#8221;,
+&#8220;passthru&#8221;. Ususally the default is &#8220;vepa&#8221;.</p>
+<p>► macvtap</p>
+<p>Almost the same as macvlan, but creates also a character tap device:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;mvtap0&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;macvtap&quot;</span><span class="p">,</span>
+        <span class="n">link</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;em1&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">macvtap_mode</span><span class="o">=</span><span class="s2">&quot;vepa&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Will create a device file <cite>&#8220;/dev/tap%s&#8221; % index</cite></p>
+<p>► tuntap</p>
+<p>Possible <cite>tuntap</cite> keywords:</p>
+<blockquote>
+<div><ul class="simple">
+<li><cite>mode</cite> — &#8220;tun&#8221; or &#8220;tap&#8221;</li>
+<li><cite>uid</cite> — integer</li>
+<li><cite>gid</cite> — integer</li>
+<li><cite>ifr</cite> — dict of tuntap flags (see ifinfmsg:... tuntap_data)</li>
+</ul>
+</div></blockquote>
+<p>Create a tap interface:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;tap0&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;tuntap&quot;</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;tap&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Tun/tap interfaces are created using <cite>ioctl()</cite>, but the library
+provides a transparent way to manage them using netlink API.</p>
+<p>► veth</p>
+<p>To properly create <cite>veth</cite> interface, one should specify
+<cite>peer</cite> also, since <cite>veth</cite> interfaces are created in pairs:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;v1p0&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;veth&quot;</span><span class="p">,</span> <span class="n">peer</span><span class="o">=</span><span class="s2">&quot;v1p1&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>► vlan</p>
+<p>VLAN interfaces require additional parameters, <cite>vlan_id</cite> and
+<cite>link</cite>, where <cite>link</cite> is a master interface to create VLAN on:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;v100&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;vlan&quot;</span><span class="p">,</span>
+        <span class="n">link</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">vlan_id</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>► vrf</p>
+<p>VRF interfaces (see linux/Documentation/networking/vrf.txt):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;vrf-foo&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;vrf&quot;</span><span class="p">,</span>
+        <span class="n">vrf_table</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>► vxlan</p>
+<p>VXLAN interfaces are like VLAN ones, but require a bit more
+parameters:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;vx101&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;vxlan&quot;</span><span class="p">,</span>
+        <span class="n">vxlan_link</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">vxlan_id</span><span class="o">=</span><span class="mi">101</span><span class="p">,</span>
+        <span class="n">vxlan_group</span><span class="o">=</span><span class="s1">&#39;239.1.1.1&#39;</span><span class="p">,</span>
+        <span class="n">vxlan_ttl</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>All possible vxlan parameters are listed in the module
+<cite>pyroute2.netlink.rtnl.ifinfmsg:... vxlan_data</cite>.</p>
+<p><strong>set</strong></p>
+<p>Set interface attributes:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># get interface index</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="c1"># put link down</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s2">&quot;down&quot;</span><span class="p">)</span>
+<span class="c1"># rename and set MAC addr</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">address</span><span class="o">=</span><span class="s2">&quot;00:11:22:33:44:55&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;bala&quot;</span><span class="p">)</span>
+<span class="c1"># set MTU and TX queue length</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">mtu</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">txqlen</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
+<span class="c1"># bring link up</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">x</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="s2">&quot;up&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Keyword &#8220;state&#8221; is reserved. State can be &#8220;up&#8221; or &#8220;down&#8221;,
+it is a shortcut:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">state</span><span class="o">=</span><span class="s2">&quot;up&quot;</span><span class="p">:</span>   <span class="n">flags</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">1</span>
+<span class="n">state</span><span class="o">=</span><span class="s2">&quot;down&quot;</span><span class="p">:</span> <span class="n">flags</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="mi">0</span>
+</pre></div>
+</div>
+<p><strong>del</strong></p>
+<p>Destroy the interface:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;del&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;dummy0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+<p><strong>dump</strong></p>
+<p>Dump info for all interfaces</p>
+<p><strong>get</strong></p>
+<p>Get specific interface info:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;get&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+</div>
+<p><strong>vlan-add</strong>
+<strong>vlan-del</strong></p>
+<p>These command names are confusing and thus are deprecated.
+Use <cite>IPRoute.vlan_filter()</cite>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.link_lookup">
+<code class="descname">link_lookup</code><span class="sig-paren">(</span><em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.link_lookup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Lookup interface index (indeces) by first level NLA
+value.</p>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">address</span><span class="o">=</span><span class="s2">&quot;52:54:00:9d:4e:3d&quot;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;lo&quot;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">operstate</span><span class="o">=</span><span class="s2">&quot;UP&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Please note, that link_lookup() returns list, not one
+value.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.neigh">
+<code class="descname">neigh</code><span class="sig-paren">(</span><em>command</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.neigh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Neighbours operations, same as <cite>ip neigh</cite> or <cite>bridge fdb</cite></p>
+<p><strong>add</strong></p>
+<p>Add a neighbour record, e.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># add a permanent record on veth0</span>
+<span class="n">idx</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;veth0&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">neigh</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;172.16.45.1&#39;</span><span class="p">,</span>
+         <span class="n">lladdr</span><span class="o">=</span><span class="s1">&#39;00:11:22:33:44:55&#39;</span><span class="p">,</span>
+         <span class="n">ifindex</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;veth0&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+         <span class="n">state</span><span class="o">=</span><span class="n">ndmsg</span><span class="o">.</span><span class="n">states</span><span class="p">[</span><span class="s1">&#39;permanent&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p><strong>set</strong></p>
+<p>Set an existing record or create a new one, if it doesn&#8217;t exist.</p>
+<p><strong>change</strong></p>
+<p>Change an existing record or fail, if it doesn&#8217;t exist.</p>
+<p><strong>del</strong></p>
+<p>Delete an existing record.</p>
+<p><strong>dump</strong></p>
+<p>Dump all the records in the NDB.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.route">
+<code class="descname">route</code><span class="sig-paren">(</span><em>command</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.route" title="Permalink to this definition">¶</a></dt>
+<dd><p>Route operations.</p>
+<p>Keywords to set up rtmsg fields:</p>
+<ul class="simple">
+<li>dst_len, src_len &#8211; destination and source mask(see <cite>dst</cite> below)</li>
+<li>tos &#8211; type of service</li>
+<li>table &#8211; routing table</li>
+<li>proto &#8211; <cite>redirect</cite>, <cite>boot</cite>, <cite>static</cite> (see <cite>rt_proto</cite>)</li>
+<li>scope &#8211; routing realm</li>
+<li>type &#8211; <cite>unicast</cite>, <cite>local</cite>, etc. (see <cite>rt_type</cite>)</li>
+</ul>
+<p><cite>pyroute2/netlink/rtnl/rtmsg.py</cite> rtmsg.nla_map:</p>
+<ul class="simple">
+<li>table &#8211; routing table to use (default: 254)</li>
+<li>gateway &#8211; via address</li>
+<li>prefsrc &#8211; preferred source IP address</li>
+<li>dst &#8211; the same as <cite>prefix</cite></li>
+<li>src &#8211; source address</li>
+<li>iif &#8211; incoming traffic interface</li>
+<li>oif &#8211; outgoing traffic interface</li>
+</ul>
+<p>etc.</p>
+<p>One can specify mask not as <cite>dst_len</cite>, but as a part of <cite>dst</cite>,
+e.g.: <cite>dst=&#8221;10.0.0.0/24&#8221;</cite>.</p>
+<p>Commands:</p>
+<p><strong>add</strong></p>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0/24&quot;</span><span class="p">,</span> <span class="n">gateway</span><span class="o">=</span><span class="s2">&quot;192.168.0.1&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It is possible to set also route metrics. There are two ways
+to do so. The first is to use &#8216;raw&#8217; NLA notation:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0&quot;</span><span class="p">,</span>
+         <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span>
+         <span class="n">gateway</span><span class="o">=</span><span class="s2">&quot;192.168.0.1&quot;</span><span class="p">,</span>
+         <span class="n">metrics</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;attrs&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="s2">&quot;RTAX_MTU&quot;</span><span class="p">,</span> <span class="mi">1400</span><span class="p">],</span>
+                            <span class="p">[</span><span class="s2">&quot;RTAX_HOPLIMIT&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">]]})</span>
+</pre></div>
+</div>
+<p>The second way is to use shortcuts, provided by <cite>IPRouteRequest</cite>
+class, which is applied to <cite>**kwarg</cite> automatically:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0/24&quot;</span><span class="p">,</span>
+         <span class="n">gateway</span><span class="o">=</span><span class="s2">&quot;192.168.0.1&quot;</span><span class="p">,</span>
+         <span class="n">metrics</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;mtu&quot;</span><span class="p">:</span> <span class="mi">1400</span><span class="p">,</span>
+                  <span class="s2">&quot;hoplimit&quot;</span><span class="p">:</span> <span class="mi">16</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>...</p>
+<p>More <cite>route()</cite> examples. Blackhole route:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0/24&quot;</span><span class="p">,</span>
+         <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;blackhole&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Multipath route:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0/24&quot;</span><span class="p">,</span>
+         <span class="n">multipath</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;gateway&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.0.1&quot;</span><span class="p">,</span> <span class="s2">&quot;hops&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s2">&quot;gateway&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.0.2&quot;</span><span class="p">,</span> <span class="s2">&quot;hops&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s2">&quot;gateway&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.0.3&quot;</span><span class="p">}])</span>
+</pre></div>
+</div>
+<p>MPLS lwtunnel on eth0:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">idx</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;eth0&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0/24&quot;</span><span class="p">,</span>
+         <span class="n">oif</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+         <span class="n">encap</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;mpls&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="s2">&quot;200/300&quot;</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>MPLS multipath:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">idx</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;eth0&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+         <span class="n">dst</span><span class="o">=</span><span class="s2">&quot;10.0.0.0/24&quot;</span><span class="p">,</span>
+         <span class="n">table</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+         <span class="n">multipath</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;gateway&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.0.1&quot;</span><span class="p">,</span>
+                     <span class="s2">&quot;encap&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;mpls&quot;</span><span class="p">,</span>
+                               <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">}},</span>
+                    <span class="p">{</span><span class="s2">&quot;ifindex&quot;</span><span class="p">:</span> <span class="n">idx</span><span class="p">,</span>
+                     <span class="s2">&quot;encap&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;mpls&quot;</span><span class="p">,</span>
+                               <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="mi">300</span><span class="p">}}])</span>
+</pre></div>
+</div>
+<p>MPLS target can be int, string, dict or list:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="mi">300</span>    <span class="c1"># simple label</span>
+<span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="s2">&quot;300&quot;</span>  <span class="c1"># the same</span>
+<span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">300</span><span class="p">)</span>  <span class="c1"># stacked</span>
+<span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="s2">&quot;200/300&quot;</span>   <span class="c1"># the same</span>
+
+<span class="c1"># explicit label definition</span>
+<span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;bos&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+           <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="mi">300</span><span class="p">,</span>
+           <span class="s2">&quot;tc&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+           <span class="s2">&quot;ttl&quot;</span><span class="p">:</span> <span class="mi">16</span><span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>change</strong>, <strong>replace</strong></p>
+<p>Commands <cite>change</cite> and <cite>replace</cite> have the same meanings, as
+in ip-route(8): <cite>change</cite> modifies only existing route, while
+<cite>replace</cite> creates a new one, if there is no such route yet.</p>
+<p><strong>del</strong></p>
+<p>Remove the route. The same syntax as for <strong>add</strong>.</p>
+<p><strong>get</strong></p>
+<p>Get route by spec.</p>
+<p><strong>dump</strong></p>
+<p>Dump all routes.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.rule">
+<code class="descname">rule</code><span class="sig-paren">(</span><em>command</em>, <em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.rule" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rule operations</p>
+<blockquote>
+<div><ul>
+<li><p class="first">command — add, delete</p>
+</li>
+<li><p class="first">table — 0 &lt; table id &lt; 253</p>
+</li>
+<li><p class="first">priority — 0 &lt; rule&#8217;s priority &lt; 32766</p>
+</li>
+<li><p class="first">action — type of rule, default &#8216;FR_ACT_NOP&#8217; (see fibmsg.py)</p>
+</li>
+<li><dl class="first docutils">
+<dt>rtscope — routing scope, default RT_SCOPE_UNIVERSE</dt>
+<dd><p class="first last"><cite>(RT_SCOPE_UNIVERSE|RT_SCOPE_SITE|                RT_SCOPE_LINK|RT_SCOPE_HOST|RT_SCOPE_NOWHERE)</cite></p>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>family — rule&#8217;s family (socket.AF_INET (default) or</dt>
+<dd><p class="first last">socket.AF_INET6)</p>
+</dd>
+</dl>
+</li>
+<li><p class="first">src — IP source for Source Based (Policy Based) routing&#8217;s rule</p>
+</li>
+<li><p class="first">dst — IP for Destination Based (Policy Based) routing&#8217;s rule</p>
+</li>
+<li><p class="first">src_len — Mask for Source Based (Policy Based) routing&#8217;s rule</p>
+</li>
+<li><dl class="first docutils">
+<dt>dst_len — Mask for Destination Based (Policy Based) routing&#8217;s</dt>
+<dd><p class="first last">rule</p>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>iifname — Input interface for Interface Based (Policy Based)</dt>
+<dd><p class="first last">routing&#8217;s rule</p>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>oifname — Output interface for Interface Based (Policy Based)</dt>
+<dd><p class="first last">routing&#8217;s rule</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+<p>All packets route via table 10:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># 32000: from all lookup 10</span>
+<span class="c1"># ...</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">rule</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">table</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">32000</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Default action:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># 32001: from all lookup 11 unreachable</span>
+<span class="c1"># ...</span>
+<span class="n">iproute</span><span class="o">.</span><span class="n">rule</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+             <span class="n">table</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span>
+             <span class="n">priority</span><span class="o">=</span><span class="mi">32001</span><span class="p">,</span>
+             <span class="n">action</span><span class="o">=</span><span class="s1">&#39;FR_ACT_UNREACHABLE&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Use source address to choose a routing table:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># 32004: from 10.64.75.141 lookup 14</span>
+<span class="c1"># ...</span>
+<span class="n">iproute</span><span class="o">.</span><span class="n">rule</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+             <span class="n">table</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span>
+             <span class="n">priority</span><span class="o">=</span><span class="mi">32004</span><span class="p">,</span>
+             <span class="n">src</span><span class="o">=</span><span class="s1">&#39;10.64.75.141&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Use dst address to choose a routing table:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># 32005: from 10.64.75.141/24 lookup 15</span>
+<span class="c1"># ...</span>
+<span class="n">iproute</span><span class="o">.</span><span class="n">rule</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+             <span class="n">table</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">priority</span><span class="o">=</span><span class="mi">32005</span><span class="p">,</span>
+             <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.64.75.141&#39;</span><span class="p">,</span>
+             <span class="n">dst_len</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Match fwmark:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># 32006: from 10.64.75.141 fwmark 0xa lookup 15</span>
+<span class="c1"># ...</span>
+<span class="n">iproute</span><span class="o">.</span><span class="n">rule</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span>
+             <span class="n">table</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">priority</span><span class="o">=</span><span class="mi">32006</span><span class="p">,</span>
+             <span class="n">dst</span><span class="o">=</span><span class="s1">&#39;10.64.75.141&#39;</span><span class="p">,</span>
+             <span class="n">fwmark</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.tc">
+<code class="descname">tc</code><span class="sig-paren">(</span><em>command</em>, <em>kind=None</em>, <em>index=0</em>, <em>handle=0</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.tc" title="Permalink to this definition">¶</a></dt>
+<dd><p>&#8220;Swiss knife&#8221; for traffic control. With the method you can
+add, delete or modify qdiscs, classes and filters.</p>
+<ul class="simple">
+<li>command &#8211; add or delete qdisc, class, filter.</li>
+<li>kind &#8211; a string identifier &#8211; &#8220;sfq&#8221;, &#8220;htb&#8221;, &#8220;u32&#8221; and so on.</li>
+<li>handle &#8211; integer or string</li>
+</ul>
+<p>Command can be one of (&#8220;add&#8221;, &#8220;del&#8221;, &#8220;add-class&#8221;, &#8220;del-class&#8221;,
+&#8220;add-filter&#8221;, &#8220;del-filter&#8221;) (see <cite>commands</cite> dict in the code).</p>
+<p>Handle notice: traditional iproute2 notation, like &#8220;1:0&#8221;, actually
+represents two parts in one four-bytes integer:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="mi">1</span><span class="p">:</span><span class="mi">0</span>    <span class="o">-&gt;</span>    <span class="mh">0x10000</span>
+<span class="mi">1</span><span class="p">:</span><span class="mi">1</span>    <span class="o">-&gt;</span>    <span class="mh">0x10001</span>
+<span class="n">ff</span><span class="p">:</span><span class="mi">0</span>   <span class="o">-&gt;</span>   <span class="mh">0xff0000</span>
+<span class="n">ffff</span><span class="p">:</span><span class="mi">1</span> <span class="o">-&gt;</span> <span class="mh">0xffff0001</span>
+</pre></div>
+</div>
+<p>Target notice: if your target is a class/qdisc that applies an
+algorithm that can only apply to upstream traffic profile, but your
+keys variable explicitly references a match that is only relevant for
+upstream traffic, the kernel will reject the filter.  Unless you&#8217;re
+dealing with devices like IMQs</p>
+<p>For pyroute2 tc() you can use both forms: integer like 0xffff0000
+or string like &#8216;ffff:0000&#8217;. By default, handle is 0, so you can add
+simple classless queues w/o need to specify handle. Ingress queue
+causes handle to be 0xffff0000.</p>
+<p>So, to set up sfq queue on interface 1, the function call
+will be like that:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;sfq&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Instead of string commands (&#8220;add&#8221;, &#8220;del&#8221;...), you can use also
+module constants, <cite>RTM_NEWQDISC</cite>, <cite>RTM_DELQDISC</cite> and so on:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="n">flags</span> <span class="o">=</span> <span class="n">NLM_F_REQUEST</span> <span class="o">|</span> <span class="n">NLM_F_ACK</span> <span class="o">|</span> <span class="n">NLM_F_CREATE</span> <span class="o">|</span> <span class="n">NLM_F_EXCL</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">((</span><span class="n">RTM_NEWQDISC</span><span class="p">,</span> <span class="n">flags</span><span class="p">),</span> <span class="s2">&quot;sfq&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Also available &#8220;modules&#8221; (returns tc plugins dict) and &#8220;help&#8221;
+commands:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">help</span><span class="p">(</span><span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;modules&quot;</span><span class="p">)[</span><span class="s2">&quot;htb&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;help&quot;</span><span class="p">,</span> <span class="s2">&quot;htb&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.iproute.IPRouteMixin.vlan_filter">
+<code class="descname">vlan_filter</code><span class="sig-paren">(</span><em>command</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.IPRouteMixin.vlan_filter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Vlan filters is another approach to support vlans in Linux.
+Before vlan filters were introduced, there was only one way
+to bridge vlans: one had to create vlan interfaces and
+then add them as ports:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>        <span class="o">+------+</span>      <span class="o">+----------+</span>
+<span class="n">net</span> <span class="o">--&gt;</span> <span class="o">|</span> <span class="n">eth0</span> <span class="o">|</span> <span class="o">&lt;--&gt;</span> <span class="o">|</span> <span class="n">eth0</span><span class="o">.</span><span class="mi">500</span> <span class="o">|</span> <span class="o">&lt;---+</span>
+        <span class="o">+------+</span>      <span class="o">+----------+</span>     <span class="o">|</span>
+                                       <span class="n">v</span>
+        <span class="o">+------+</span>                    <span class="o">+-----+</span>
+<span class="n">net</span> <span class="o">--&gt;</span> <span class="o">|</span> <span class="n">eth1</span> <span class="o">|</span>                    <span class="o">|</span> <span class="n">br0</span> <span class="o">|</span>
+        <span class="o">+------+</span>                    <span class="o">+-----+</span>
+                                       <span class="o">^</span>
+        <span class="o">+------+</span>      <span class="o">+----------+</span>     <span class="o">|</span>
+<span class="n">net</span> <span class="o">--&gt;</span> <span class="o">|</span> <span class="n">eth2</span> <span class="o">|</span> <span class="o">&lt;--&gt;</span> <span class="o">|</span> <span class="n">eth0</span><span class="o">.</span><span class="mi">500</span> <span class="o">|</span> <span class="o">&lt;---+</span>
+        <span class="o">+------+</span>      <span class="o">+----------+</span>
+</pre></div>
+</div>
+<p>It means that one has to create as many bridges, as there were
+vlans. Vlan filters allow to bridge together underlying interfaces
+and create vlans already on the bridge:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># v500 label shows which interfaces have vlan filter</span>
+
+        <span class="o">+------+</span> <span class="n">v500</span>
+<span class="n">net</span> <span class="o">--&gt;</span> <span class="o">|</span> <span class="n">eth0</span> <span class="o">|</span> <span class="o">&lt;-------+</span>
+        <span class="o">+------+</span>         <span class="o">|</span>
+                         <span class="n">v</span>
+        <span class="o">+------+</span>      <span class="o">+-----+</span>    <span class="o">+---------+</span>
+<span class="n">net</span> <span class="o">--&gt;</span> <span class="o">|</span> <span class="n">eth1</span> <span class="o">|</span> <span class="o">&lt;--&gt;</span> <span class="o">|</span> <span class="n">br0</span> <span class="o">|&lt;--&gt;|</span> <span class="n">br0v500</span> <span class="o">|</span>
+        <span class="o">+------+</span>      <span class="o">+-----+</span>    <span class="o">+---------+</span>
+                         <span class="o">^</span>
+        <span class="o">+------+</span> <span class="n">v500</span>    <span class="o">|</span>
+<span class="n">net</span> <span class="o">--&gt;</span> <span class="o">|</span> <span class="n">eth2</span> <span class="o">|</span> <span class="o">&lt;-------+</span>
+        <span class="o">+------+</span>
+</pre></div>
+</div>
+<p>In this example vlan 500 will be allowed only on ports <cite>eth0</cite> and
+<cite>eth2</cite>, though all three eth nics are bridged.</p>
+<p>Some example code:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># create bridge</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;bridge&quot;</span><span class="p">)</span>
+
+<span class="c1"># attach a port</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">master</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># set vlan filter</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">vlan_filter</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+               <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+               <span class="n">vlan_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;vid&quot;</span><span class="p">:</span> <span class="mi">500</span><span class="p">})</span>
+
+<span class="c1"># create vlan interface on the bridge</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0v500&quot;</span><span class="p">,</span>
+        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;vlan&quot;</span><span class="p">,</span>
+        <span class="n">link</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">vlan_id</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+
+<span class="c1"># set all UP</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">state</span><span class="o">=</span><span class="s2">&quot;up&quot;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0v500&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">state</span><span class="o">=</span><span class="s2">&quot;up&quot;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s2">&quot;set&quot;</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">state</span><span class="o">=</span><span class="s2">&quot;up&quot;</span><span class="p">)</span>
+
+<span class="c1"># set IP address</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">ip</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;br0v500&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">address</span><span class="o">=</span><span class="s2">&quot;172.16.5.2&quot;</span><span class="p">,</span>
+        <span class="n">mask</span><span class="o">=</span><span class="mi">24</span><span class="p">)</span>
+
+<span class="n">Now</span> <span class="nb">all</span> <span class="n">the</span> <span class="n">traffic</span> <span class="n">to</span> <span class="n">the</span> <span class="n">network</span> <span class="mf">172.16</span><span class="o">.</span><span class="mf">5.2</span><span class="o">/</span><span class="mi">24</span> <span class="n">will</span> <span class="n">go</span>
+<span class="n">to</span> <span class="n">vlan</span> <span class="mi">500</span> <span class="n">only</span> <span class="n">via</span> <span class="n">ports</span> <span class="n">that</span> <span class="n">have</span> <span class="n">such</span> <span class="n">vlan</span> <span class="nb">filter</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>Required arguments for <cite>vlan_filter()</cite> &#8211; <cite>index</cite> and <cite>vlan_info</cite>.
+Vlan info struct:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;vid&quot;</span><span class="p">:</span> <span class="n">uint16</span><span class="p">,</span>
+ <span class="s2">&quot;flags&quot;</span><span class="p">:</span> <span class="n">uint16</span><span class="p">}</span>
+</pre></div>
+</div>
+<dl class="docutils">
+<dt>More details:</dt>
+<dd><ul class="first last simple">
+<li>kernel:Documentation/networking/switchdev.txt</li>
+<li>pyroute2.netlink.rtnl.ifinfmsg:... vlan_info</li>
+</ul>
+</dd>
+<dt>One can specify <cite>flags</cite> as int or as a list of flag names:</dt>
+<dd><ul class="first last simple">
+<li><cite>master</cite> == 0x1</li>
+<li><cite>pvid</cite> == 0x2</li>
+<li><cite>untagged</cite> == 0x4</li>
+<li><cite>range_begin</cite> == 0x8</li>
+<li><cite>range_end</cite> == 0x10</li>
+<li><cite>brentry</cite> == 0x20</li>
+</ul>
+</dd>
+</dl>
+<p>E.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;vid&quot;</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+ <span class="s2">&quot;flags&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;pvid&quot;</span><span class="p">,</span> <span class="s2">&quot;untagged&quot;</span><span class="p">]}</span>
+
+<span class="c1"># is equal to</span>
+<span class="p">{</span><span class="s2">&quot;vid&quot;</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+ <span class="s2">&quot;flags&quot;</span><span class="p">:</span> <span class="mi">6</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Commands:</p>
+<p><strong>add</strong></p>
+<p>Add vlan filter to a bridge port. Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">vlan_filter</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">vlan_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;vid&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">})</span>
+</pre></div>
+</div>
+<p><strong>del</strong></p>
+<p>Remove vlan filter from a bridge port. Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">vlan_filter</span><span class="p">(</span><span class="s2">&quot;del&quot;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">vlan_info</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;vid&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">})</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.iproute.RawIPRoute">
+<em class="property">class </em><code class="descclassname">pyroute2.iproute.</code><code class="descname">RawIPRoute</code><span class="sig-paren">(</span><em>fileno=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.iproute.RawIPRoute" title="Permalink to this definition">¶</a></dt>
+<dd><p>The same as <cite>IPRoute</cite>, but does not use the netlink proxy.
+Thus it can not manage e.g. tun/tap interfaces.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="module-pyroute2.netlink.rtnl.tcmsg.sched_drr">
+<span id="queueing-disciplines"></span><h2>Queueing disciplines<a class="headerlink" href="#module-pyroute2.netlink.rtnl.tcmsg.sched_drr" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="drr">
+<h3>drr<a class="headerlink" href="#drr" title="Permalink to this headline">¶</a></h3>
+<p>The qdisc doesn&#8217;t accept any parameters, but the class
+accepts <cite>quantum</cite> parameter:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="s1">&#39;drr&#39;</span><span class="p">,</span> <span class="n">interface</span><span class="p">,</span> <span class="s1">&#39;1:&#39;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s1">&#39;add-class&#39;</span><span class="p">,</span> <span class="s1">&#39;drr&#39;</span><span class="p">,</span> <span class="n">interface</span><span class="p">,</span> <span class="s1">&#39;1:10&#39;</span><span class="p">,</span> <span class="n">quantum</span><span class="o">=</span><span class="mi">1600</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s1">&#39;add-class&#39;</span><span class="p">,</span> <span class="s1">&#39;drr&#39;</span><span class="p">,</span> <span class="n">interface</span><span class="p">,</span> <span class="s1">&#39;1:20&#39;</span><span class="p">,</span> <span class="n">quantum</span><span class="o">=</span><span class="mi">1600</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<span class="target" id="module-pyroute2.netlink.rtnl.tcmsg.sched_choke"></span><div class="section" id="choke">
+<h3>choke<a class="headerlink" href="#choke" title="Permalink to this headline">¶</a></h3>
+<p>Parameters:</p>
+<blockquote>
+<div><ul class="simple">
+<li><cite>limit</cite> (required) &#8211; int</li>
+<li><cite>bandwith</cite> (required) &#8211; str/int</li>
+<li><cite>min</cite> &#8211; int</li>
+<li><cite>max</cite> &#8211; int</li>
+<li><cite>avpkt</cite> &#8211; str/int, packet size</li>
+<li><cite>burst</cite> &#8211; int</li>
+<li><cite>probability</cite> &#8211; float</li>
+<li><cite>ecn</cite> &#8211; bool</li>
+</ul>
+</div></blockquote>
+<p>Example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="s1">&#39;choke&#39;</span><span class="p">,</span> <span class="n">interface</span><span class="p">,</span>
+      <span class="n">limit</span><span class="o">=</span><span class="mi">5500</span><span class="p">,</span>
+      <span class="n">bandwith</span><span class="o">=</span><span class="s2">&quot;10mbit&quot;</span><span class="p">,</span>
+      <span class="n">ecn</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<span class="target" id="module-pyroute2.netlink.rtnl.tcmsg.sched_clsact"></span><div class="section" id="clsact">
+<h3>clsact<a class="headerlink" href="#clsact" title="Permalink to this headline">¶</a></h3>
+<p>The clsact qdisc provides a mechanism to attach integrated
+filter-action classifiers to an interface, either at ingress or egress,
+or both. The use case shown here is using a bpf program (implemented
+elsewhere) to direct the packet processing. The example also uses the
+direct-action feature to specify what to do with each packet (pass,
+drop, redirect, etc.).</p>
+<p>BPF ingress/egress example using clsact qdisc:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># open_bpf_fd is outside the scope of pyroute2</span>
+<span class="c1">#fd = open_bpf_fd()</span>
+<span class="n">eth0</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">get_links</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;clsact&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">)</span>
+<span class="c1"># add ingress clsact</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;bpf&quot;</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="s2">&quot;:1&quot;</span><span class="p">,</span> <span class="n">fd</span><span class="o">=</span><span class="n">fd</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myprog&quot;</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="s2">&quot;ffff:fff2&quot;</span><span class="p">,</span> <span class="n">classid</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">direct_action</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># add egress clsact</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;bpf&quot;</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="s2">&quot;:1&quot;</span><span class="p">,</span> <span class="n">fd</span><span class="o">=</span><span class="n">fd</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;myprog&quot;</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="s2">&quot;ffff:fff3&quot;</span><span class="p">,</span> <span class="n">classid</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">direct_action</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<span class="target" id="module-pyroute2.netlink.rtnl.tcmsg.sched_hfsc"></span><div class="section" id="hfsc">
+<h3>hfsc<a class="headerlink" href="#hfsc" title="Permalink to this headline">¶</a></h3>
+<p>Simple HFSC example:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">eth0</span> <span class="o">=</span> <span class="n">ip</span><span class="o">.</span><span class="n">get_links</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s2">&quot;eth0&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;hfsc&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+      <span class="n">handle</span><span class="o">=</span><span class="s2">&quot;1:&quot;</span><span class="p">,</span>
+      <span class="n">default</span><span class="o">=</span><span class="s2">&quot;1:1&quot;</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-class&quot;</span><span class="p">,</span> <span class="s2">&quot;hfsc&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+      <span class="n">handle</span><span class="o">=</span><span class="s2">&quot;1:1&quot;</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="s2">&quot;1:0&quot;</span>
+      <span class="n">rsc</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;m2&quot;</span><span class="p">:</span> <span class="s2">&quot;5mbit&quot;</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>HFSC curve nla types:</p>
+<ul class="simple">
+<li><cite>rsc</cite>: real-time curve</li>
+<li><cite>fsc</cite>: link-share curve</li>
+<li><cite>usc</cite>: upper-limit curve</li>
+</ul>
+</div>
+<span class="target" id="module-pyroute2.netlink.rtnl.tcmsg.sched_htb"></span><div class="section" id="htb">
+<h3>htb<a class="headerlink" href="#htb" title="Permalink to this headline">¶</a></h3>
+<p>TODO: list parameters</p>
+<p>An example with htb qdisc, lets assume eth0 == 2:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1">#          u32 --&gt;    +--&gt; htb 1:10 --&gt; sfq 10:0</span>
+<span class="c1">#          |          |</span>
+<span class="c1">#          |          |</span>
+<span class="c1"># eth0 -- htb 1:0 -- htb 1:1</span>
+<span class="c1">#          |          |</span>
+<span class="c1">#          |          |</span>
+<span class="c1">#          u32 --&gt;    +--&gt; htb 1:20 --&gt; sfq 20:0</span>
+
+<span class="n">eth0</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="c1"># add root queue 1:0</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;htb&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span> <span class="mh">0x10000</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mh">0x200000</span><span class="p">)</span>
+
+<span class="c1"># root class 1:1</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-class&quot;</span><span class="p">,</span> <span class="s2">&quot;htb&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span> <span class="mh">0x10001</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10000</span><span class="p">,</span>
+      <span class="n">rate</span><span class="o">=</span><span class="s2">&quot;256kbit&quot;</span><span class="p">,</span>
+      <span class="n">burst</span><span class="o">=</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">6</span><span class="p">)</span>
+
+<span class="c1"># two branches: 1:10 and 1:20</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-class&quot;</span><span class="p">,</span> <span class="s2">&quot;htb&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span> <span class="mh">0x10010</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10001</span><span class="p">,</span>
+      <span class="n">rate</span><span class="o">=</span><span class="s2">&quot;192kbit&quot;</span><span class="p">,</span>
+      <span class="n">burst</span><span class="o">=</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">6</span><span class="p">,</span>
+      <span class="n">prio</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-class&quot;</span><span class="p">,</span> <span class="s2">&quot;htb&quot;</span><span class="p">,</span> <span class="n">eht0</span><span class="p">,</span> <span class="mh">0x10020</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10001</span><span class="p">,</span>
+      <span class="n">rate</span><span class="o">=</span><span class="s2">&quot;128kbit&quot;</span><span class="p">,</span>
+      <span class="n">burst</span><span class="o">=</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">6</span><span class="p">,</span>
+      <span class="n">prio</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="c1"># two leaves: 10:0 and 20:0</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;sfq&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span> <span class="mh">0x100000</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10010</span><span class="p">,</span>
+      <span class="n">perturb</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;sfq&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span> <span class="mh">0x200000</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10020</span><span class="p">,</span>
+      <span class="n">perturb</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="c1"># two filters: one to load packets into 1:10 and the</span>
+<span class="c1"># second to 1:20</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;u32&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10000</span><span class="p">,</span>
+      <span class="n">prio</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+      <span class="n">protocol</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span>
+      <span class="n">target</span><span class="o">=</span><span class="mh">0x10010</span><span class="p">,</span>
+      <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;0x0006/0x00ff+8&quot;</span><span class="p">,</span> <span class="s2">&quot;0x0000/0xffc0+2&quot;</span><span class="p">])</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;u32&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10000</span><span class="p">,</span>
+      <span class="n">prio</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+      <span class="n">protocol</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span>
+      <span class="n">target</span><span class="o">=</span><span class="mh">0x10020</span><span class="p">,</span>
+      <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;0x5/0xf+0&quot;</span><span class="p">,</span> <span class="s2">&quot;0x10/0xff+33&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="module-pyroute2.netlink.rtnl.tcmsg.cls_u32">
+<span id="filters"></span><h2>Filters<a class="headerlink" href="#module-pyroute2.netlink.rtnl.tcmsg.cls_u32" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="u32">
+<h3>u32<a class="headerlink" href="#u32" title="Permalink to this headline">¶</a></h3>
+<p>Filters can take an <cite>action</cite> argument, which affects the packet
+behavior when the filter matches. Currently the gact, bpf, and police
+action types are supported, and can be attached to the u32 and bpf
+filter types:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># An action can be a simple string, which translates to a gact type</span>
+<span class="n">action</span> <span class="o">=</span> <span class="s2">&quot;drop&quot;</span>
+
+<span class="c1"># Or it can be an explicit type (these are equivalent)</span>
+<span class="n">action</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;gact&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;drop&quot;</span><span class="p">)</span>
+
+<span class="c1"># There can also be a chain of actions, which depend on the return</span>
+<span class="c1"># value of the previous action.</span>
+<span class="n">action</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="nb">dict</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;bpf&quot;</span><span class="p">,</span> <span class="n">fd</span><span class="o">=</span><span class="n">fd</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;ok&quot;</span><span class="p">),</span>
+    <span class="nb">dict</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;police&quot;</span><span class="p">,</span> <span class="n">rate</span><span class="o">=</span><span class="s2">&quot;10kbit&quot;</span><span class="p">,</span> <span class="n">burst</span><span class="o">=</span><span class="mi">10240</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+    <span class="nb">dict</span><span class="p">(</span><span class="n">kind</span><span class="o">=</span><span class="s2">&quot;gact&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;ok&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+
+<span class="c1"># Add the action to a u32 match-all filter</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add&quot;</span><span class="p">,</span> <span class="s2">&quot;htb&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span> <span class="mh">0x10000</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mh">0x200000</span><span class="p">)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;u32&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+      <span class="n">parent</span><span class="o">=</span><span class="mh">0x10000</span><span class="p">,</span>
+      <span class="n">prio</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+      <span class="n">protocol</span><span class="o">=</span><span class="n">protocols</span><span class="o">.</span><span class="n">ETH_P_ALL</span><span class="p">,</span>
+      <span class="n">target</span><span class="o">=</span><span class="mh">0x10020</span><span class="p">,</span>
+      <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;0x0/0x0+0&quot;</span><span class="p">],</span>
+      <span class="n">action</span><span class="o">=</span><span class="n">action</span><span class="p">)</span>
+
+<span class="c1"># Add two more filters: One to send packets with a src address of</span>
+<span class="c1"># 192.168.0.1/32 into 1:10 and the second to send packets  with a</span>
+<span class="c1"># dst address of 192.168.0.0/24 into 1:20</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;u32&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+    <span class="n">parent</span><span class="o">=</span><span class="mh">0x10000</span><span class="p">,</span>
+    <span class="n">prio</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">protocol</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span>
+    <span class="n">target</span><span class="o">=</span><span class="mh">0x10010</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;0xc0a80001/0xffffffff+12&quot;</span><span class="p">])</span>
+    <span class="c1"># 0xc0a800010 = 192.168.0.1</span>
+    <span class="c1"># 0xffffffff = 255.255.255.255 (/32)</span>
+    <span class="c1"># 12 = Source network field bit offset</span>
+
+<span class="n">ip</span><span class="o">.</span><span class="n">tc</span><span class="p">(</span><span class="s2">&quot;add-filter&quot;</span><span class="p">,</span> <span class="s2">&quot;u32&quot;</span><span class="p">,</span> <span class="n">eth0</span><span class="p">,</span>
+    <span class="n">parent</span><span class="o">=</span><span class="mh">0x10000</span><span class="p">,</span>
+    <span class="n">prio</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">protocol</span><span class="o">=</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span>
+    <span class="n">target</span><span class="o">=</span><span class="mh">0x10020</span><span class="p">,</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;0xc0a80000/0xffffff00+16&quot;</span><span class="p">])</span>
+    <span class="c1"># 0xc0a80000 = 192.168.0.0</span>
+    <span class="c1"># 0xffffff00 = 255.255.255.0 (/24)</span>
+    <span class="c1"># 16 = Destination network field bit offset</span>
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">IPRoute module</a><ul>
+<li><a class="reference internal" href="#iproute-quickstart">IPRoute quickstart</a></li>
+<li><a class="reference internal" href="#responses">Responses</a><ul>
+<li><a class="reference internal" href="#nlmsg-error-responses">NLMSG_ERROR responses</a></li>
+<li><a class="reference internal" href="#how-to-work-with-messages">How to work with messages</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#threaded-vs-threadless-architecture">Threaded vs. threadless architecture</a></li>
+<li><a class="reference internal" href="#think-about-ipdb">Think about IPDB</a></li>
+<li><a class="reference internal" href="#api">API</a></li>
+<li><a class="reference internal" href="#module-pyroute2.netlink.rtnl.tcmsg.sched_drr">Queueing disciplines</a><ul>
+<li><a class="reference internal" href="#drr">drr</a></li>
+<li><a class="reference internal" href="#choke">choke</a></li>
+<li><a class="reference internal" href="#clsact">clsact</a></li>
+<li><a class="reference internal" href="#hfsc">hfsc</a></li>
+<li><a class="reference internal" href="#htb">htb</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-pyroute2.netlink.rtnl.tcmsg.cls_u32">Filters</a><ul>
+<li><a class="reference internal" href="#u32">u32</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="usage.html"
+                        title="previous chapter">Quickstart</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="ipdb.html"
+                        title="next chapter">IPDB module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/iproute.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="ipdb.html" title="IPDB module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="usage.html" title="Quickstart"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

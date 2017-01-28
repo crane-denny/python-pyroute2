@@ -13,7 +13,7 @@ The library provides several modules:
 * Netlink protocol implementations (RTNetlink, TaskStats, etc)
     * **rtnl**, network settings --- addresses, routes, traffic controls
     * **nl80211** --- wireless functions API (work in progress)
-    * **nfnetlink** --- netfilter API: **ipset** (work in progress), ...
+    * **nfnetlink** --- netfilter API: **ipset**, **nftables** (work in progress), ...
     * **ipq** --- simplest userspace packet filtering, iptables QUEUE target
     * **taskstats** --- extended process statistics
 * Simple netlink socket object, that can be used in poll/select
@@ -27,11 +27,6 @@ rtnetlink sample
 More samples you can read in the project documentation.
 
 Low-level **IPRoute** utility --- Linux network configuration.
-**IPRoute** usually doesn't rely on external utilities, but in some
-cases, when the kernel doesn't provide the functionality via netlink
-(like on RHEL6.5), it transparently uses also brctl and sysfs to setup
-bridges and bonding interfaces.
-
 The **IPRoute** class is a 1-to-1 RTNL mapping. There are no implicit
 interface lookups and so on.
 
@@ -39,8 +34,6 @@ Some examples::
 
     from socket import AF_INET
     from pyroute2 import IPRoute
-    from pyroute2 import IPRouteRequest
-    from pyroute2.common import AF_MPLS
 
     # get access to the netlink socket
     ip = IPRoute()
@@ -48,11 +41,18 @@ Some examples::
     # print interfaces
     print(ip.get_links())
 
-    # create VETH pair
+    # create VETH pair and move v0p1 to netns 'test'
     ip.link_create(ifname='v0p0', peer='v0p1', kind='veth')
+    idx = ip.link_lookup(ifname='v0p1')[0]
+    ip.link('set',
+            index=idx,
+            net_ns_fd='test')
 
-    # lookup the interface and add an address
+    # bring v0p0 up and add an address
     idx = ip.link_lookup(ifname='v0p0')[0]
+    ip.link('set',
+            index=idx,
+            state='up')
     ip.addr('add',
             index=idx,
             address='10.0.0.1',
@@ -60,22 +60,28 @@ Some examples::
             prefixlen=24)
 
     # create a route with metrics
-    req = IPRouteRequest({'dst': '172.16.0.0/24',
-                          'gateway': '10.0.0.10',
-                          'metrics': {'mtu': 1400,
-                                      'hoplimit': 16}})
-    ip.route('add', **req)
+    ip.route('add',
+             dst='172.16.0.0/24',
+             gateway='10.0.0.10',
+             metrics={'mtu': 1400,
+                      'hoplimit': 16})
 
-    # create a MPLS route (requires kernel >= 4.1.4)
+    # create MPLS lwtunnel
+    # $ sudo modprobe mpls_iptunnel
+    ip.route('add',
+             dst='172.16.0.0/24',
+             oif=idx,
+             encap={'type': 'mpls',
+                    'labels': '200/300'})
+
+    # create MPLS route: push label
     # $ sudo modprobe mpls_router
-    # $ sudo sysctl -w net.mpls.platform_labels=1000
-    req = IPRouteRequest({'family': AF_MPLS,
-                          'oif': 2,
-                          'via': {'family': AF_INET,
-                                  'addr': '172.16.0.10'},
-                          'newdst': {'label': 0x20,
-                                     'bos': 1}})
-    ip.route('add', **req)
+    # $ sudo sysctl net.mpls.platform_labels=1024
+    ip.route('add',
+             family=AF_MPLS,
+             oif=idx,
+             dst=0x200,
+             newdst=[0x200, 0x300])
 
     # release Netlink socket
     ip.close()
@@ -84,20 +90,23 @@ Some examples::
 High-level transactional interface, **IPDB**, a network settings DB::
 
     from pyroute2 import IPDB
-    # local network settings
-    ip = IPDB()
-    # create bridge and add ports and addresses
-    # transaction will be started with `with` statement
-    # and will be committed at the end of the block
-    try:
+    #
+    # The `with` statement automatically calls `IPDB.release()`
+    # in the case of an exception.
+    with IPDB() as ip:
+        #
+        # Create bridge and add ports and addresses.
+        #
+        # Transaction will be started by `with` statement
+        # and will be committed at the end of the block
         with ip.create(kind='bridge', ifname='rhev') as i:
-            i.add_port(ip.interfaces.em1)
-            i.add_port(ip.interfaces.em2)
+            i.add_port('em1')
+            i.add_port('em2')
             i.add_ip('10.0.0.2/24')
-    except Exception as e:
-        print(e)
-    finally:
-        ip.release()
+        # --> <-- Here the system state is as described in
+        #         the transaction, if no error occurs. If
+        #         there is an error, all the changes will be
+        #         rolled back.
 
 The IPDB arch allows to use it transparently with network
 namespaces::
@@ -105,15 +114,19 @@ namespaces::
     from pyroute2 import IPDB
     from pyroute2 import NetNS
 
-    # create IPDB to work in the 'test' ip netns
-    # pls notice, that IPDB itself will work in the
-    # main netns
+    # Create IPDB to work with the 'test' ip netns.
+    #
+    # Pls notice, that IPDB itself will work in the
+    # main netns, only the netlink transport is
+    # working in the namespace `test`.
     ip = IPDB(nl=NetNS('test'))
 
-    # wait until someone will set up ipaddr 127.0.0.1
+    # Wait until someone will set up ipaddr 127.0.0.1
     # in the netns on the loopback device
     ip.interfaces.lo.wait_ip('127.0.0.1')
 
+    # The IPDB object must be released before exit to
+    # sync all the possible changes that are in progress.
     ip.release()
 
 The project contains several modules for different types of
@@ -164,7 +177,7 @@ installation
 requires
 --------
 
-Python >= 2.6
+Python >= 2.7
 
 The pyroute2 testing framework requires  **flake8**, **coverage**,
 **nosetests**.
