@@ -2,8 +2,11 @@
 Platform tests to discover the system capabilities.
 '''
 import os
+import sys
 import select
+import struct
 import threading
+from pyroute2 import config
 from pyroute2.common import uifname
 from pyroute2 import RawIPRoute
 from pyroute2.netlink.rtnl import RTNLGRP_LINK
@@ -11,19 +14,6 @@ from pyroute2.netlink.rtnl import RTNLGRP_LINK
 
 class SkipTest(Exception):
     pass
-
-
-def condition(predicate):
-    # FIXME: to be documented and moved to common?
-    def wrapper(f):
-        if predicate():
-            return f
-
-        def skip(*argv, **kwarg):
-            raise SkipTest()
-        skip.__name__ = f.__name__
-        return skip
-    return wrapper
 
 
 class TestCapsRtnl(object):
@@ -35,11 +25,31 @@ class TestCapsRtnl(object):
     no transparent helpers are executed -- e.g., it will not
     create bridge via `brctl`, if RTNL doesn't support it.
 
-    One of the most important requirements is the performance,
-    so the test set collects as much information from the
-    broadcast messages, as it is possible. This set contains
-    only tests that are important for IPDB module. Please do not
-    extend it, as it will slow down the first IPDB instantiation.
+    A short developer's guide::
+
+        def test_whatever_else(self):
+            code
+
+    This test will create a capability record `whatever_else`. If
+    the `code` fails, the `whatever_else` will be set to `False`.
+    If it throws the `SkipTest` exception, the `whatever_else` will
+    be set to `None`. Otherwise it will be set to whatever the test
+    returns.
+
+    To collect the capabilities::
+
+        tce = TestCapsExt()
+        tce.collect()
+        print(tce.capabilities)
+
+    Collected capabilities are in the `TestCapsExt.capabilities`
+    dictionary, you can use them directly or by setting the
+    `config.capabilities` singletone::
+
+        from pyroute2 import config
+        # ...
+        tce.collect()
+        config.capabilities = tce.capabilities
     '''
 
     def __init__(self):
@@ -120,7 +130,7 @@ class TestCapsRtnl(object):
             self.rtm_events[ifname].wait()
             self.rtm_events[ifname].clear()
             if self.rtm_newlink.get(ifname):
-                self.ip.link_remove(self.rtm_newlink[ifname][0]['index'])
+                self.ip.link('del', index=self.rtm_newlink[ifname][0]['index'])
         self.ifnames = []
         # close the socket
         self.ip.close()
@@ -155,27 +165,53 @@ class TestCapsRtnl(object):
         # stop the monitor
         os.write(self.cmdw, b'q')
         mthread.join()
+        return self.capabilities
+
+    def test_uname(self):
+        '''
+        Return collected uname
+        '''
+        return config.uname
+
+    def test_python_version(self):
+        '''
+        Return Python version
+        '''
+        return sys.version
+
+    def test_unpack_from(self):
+        '''
+        Does unpack_from() support bytearray as the buffer
+        '''
+        # probe unpack from
+        try:
+            struct.unpack_from('I', bytearray((1, 0, 0, 0)), 0)
+        except:
+            return False
+        # works... but may it be monkey patched?
+        if hasattr(struct, '_u_f_orig'):
+            return False
 
     def test_create_dummy(self):
         '''
         An obvious test: an ability to create dummy interfaces
         '''
         self.ghost = self.ifname()
-        self.ip.link_create(ifname=self.ghost, kind='dummy')
+        self.ip.link('add', ifname=self.ghost, kind='dummy')
 
     def test_create_bridge(self):
         '''
         Can the kernel create bridges via netlink?
         '''
-        self.ip.link_create(ifname=self.ifname(), kind='bridge')
+        self.ip.link('add', ifname=self.ifname(), kind='bridge')
 
     def test_create_bond(self):
         '''
         Can the kernel create bonds via netlink?
         '''
-        self.ip.link_create(ifname=self.ifname(), kind='bond')
+        self.ip.link('add', ifname=self.ifname(), kind='bond')
 
-    def test_ghost_newlink(self):
+    def test_ghost_newlink_count(self):
         '''
         A normal flow (req == request, brd == broadcast message)::
 
@@ -216,38 +252,3 @@ class TestCapsRtnl(object):
         # there is no guarantee it will come; it *may* come
         self.rtm_events[self.ghost].wait(0.5)
         return max(len(self.rtm_newlink.get(self.ghost, [])) - 1, 0)
-
-
-class TestCapsExt(TestCapsRtnl):
-    '''
-    A test set that can be extended without a risk to slow down
-    the IPDB. If you want your tests to be included into the
-    package, submit them here.
-
-    A short developer's guide::
-
-        def test_whatever_else(self):
-            code
-
-    This test will create a capability record `whatever_else`. If
-    the `code` fails, the `whatever_else` will be set to `False`.
-    If it throws the `SkipTest` exception, the `whatever_else` will
-    be set to `None`. Otherwise it will be set to whatever the test
-    returns.
-
-    To collect the capabilities::
-
-        tce = TestCapsExt()
-        tce.collect()
-        print(tce.capabilities)
-
-    Collected capabilities are in the `TestCapsExt.capabilities`
-    dictionary, you can use them directly or by setting the
-    `config.capabilities` singletone::
-
-        from pyroute2 import config
-        # ...
-        tce.collect()
-        config.capabilities = tce.capabilities
-    '''
-    pass

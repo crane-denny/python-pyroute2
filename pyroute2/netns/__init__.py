@@ -23,7 +23,7 @@ Create veth and move the peer to a netns with IPRoute::
 
     from pyroute2 import IPRoute
     ipr = IPRoute()
-    ipr.link_create(ifname='v0p0', kind='veth', peer='v0p1')
+    ipr.link('add', ifname='v0p0', kind='veth', peer='v0p1')
     idx = ipr.link_lookup(ifname='v0p1')[0]
     ipr.link('set', index=idx, net_ns_fd='netns_name')
 
@@ -79,6 +79,7 @@ SELinux state with `getenforce` command.
 '''
 
 import os
+import os.path
 import errno
 import ctypes
 from pyroute2 import config
@@ -89,8 +90,8 @@ __NR = {'x86_': {'64bit': 308},
         'i686': {'32bit': 346},
         'mips': {'32bit': 4344,
                  '64bit': 5303},  # FIXME: NABI32?
-        'armv': {'32bit': 375,
-                 '64bit': 375}}  # FIXME: EABI vs. OABI?
+        'armv': {'32bit': 375},
+        'aarc': {'64bit': 268}}  # FIXME: EABI vs. OABI?
 __NR_setns = __NR.get(config.machine[:4], {}).get(config.arch, 308)
 
 CLONE_NEWNET = 0x40000000
@@ -101,12 +102,25 @@ MS_SHARED = 1 << 20
 NETNS_RUN_DIR = '/var/run/netns'
 
 
-def listnetns():
+def _get_netnspath(name):
+    netnspath = name
+    dirname = os.path.dirname(name)
+    if not dirname:
+        netnspath = '%s/%s' % (NETNS_RUN_DIR, name)
+    netnspath = netnspath.encode('ascii')
+    return netnspath
+
+
+def listnetns(nspath=None):
     '''
     List available network namespaces.
     '''
+    if nspath:
+        nsdir = nspath
+    else:
+        nsdir = NETNS_RUN_DIR
     try:
-        return os.listdir(NETNS_RUN_DIR)
+        return os.listdir(nsdir)
     except OSError as e:
         if e.errno == errno.ENOENT:
             return []
@@ -119,11 +133,8 @@ def create(netns, libc=None):
     Create a network namespace.
     '''
     libc = libc or ctypes.CDLL('libc.so.6', use_errno=True)
-    # FIXME validate and prepare NETNS_RUN_DIR
-
-    netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
-    netnspath = netnspath.encode('ascii')
-    netnsdir = NETNS_RUN_DIR.encode('ascii')
+    netnspath = _get_netnspath(netns)
+    netnsdir = os.path.dirname(netnspath)
 
     # init netnsdir
     try:
@@ -158,8 +169,7 @@ def remove(netns, libc=None):
     Remove a network namespace.
     '''
     libc = libc or ctypes.CDLL('libc.so.6', use_errno=True)
-    netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
-    netnspath = netnspath.encode('ascii')
+    netnspath = _get_netnspath(netns)
     libc.umount2(netnspath, MNT_DETACH)
     os.unlink(netnspath)
 
@@ -175,10 +185,9 @@ def setns(netns, flags=os.O_CREAT, libc=None):
         - O_CREAT | O_EXCL -- create only if doesn't exist
     '''
     libc = libc or ctypes.CDLL('libc.so.6', use_errno=True)
-    netnspath = '%s/%s' % (NETNS_RUN_DIR, netns)
-    netnspath = netnspath.encode('ascii')
+    netnspath = _get_netnspath(netns)
 
-    if netns in listnetns():
+    if os.path.basename(netns) in listnetns(os.path.dirname(netns)):
         if flags & (os.O_CREAT | os.O_EXCL) == (os.O_CREAT | os.O_EXCL):
             raise OSError(errno.EEXIST, 'netns exists', netns)
     else:

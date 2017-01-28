@@ -1,0 +1,827 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>changelog &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="makefile documentation" href="makefile.html" />
+    <link rel="prev" title="pyroute2" href="general.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="makefile.html" title="makefile documentation"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="general.html" title="pyroute2"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="changelog">
+<h1>changelog<a class="headerlink" href="#changelog" title="Permalink to this headline">¶</a></h1>
+<ul>
+<li><dl class="first docutils">
+<dt>0.4.12</dt>
+<dd><ul class="first last simple">
+<li>ipdb: #314 &#8211; let users choose RTNL groups IPDB listens to</li>
+<li>ipdb: #321 &#8211; isolate <cite>net_ns_.*</cite> setup in a separate code block</li>
+<li>ipdb: #322 &#8211; IPv6 updates on interfaces in DOWN state</li>
+<li>ifinfmsg: allow absolute/relative paths in the net_ns_fd NLA</li>
+<li>ipset: #323 &#8211; support setting counters on ipset add</li>
+<li>ipset: <cite>headers()</cite> command</li>
+<li>ipset: revisions</li>
+<li>ipset: #326 &#8211; mark types</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.11</dt>
+<dd><ul class="first last simple">
+<li>rtnl: #284 &#8211; support vlan_flags</li>
+<li>ipdb: #288 &#8211; do not inore link-local addresses</li>
+<li>ipdb: #300 &#8211; sort ip addresses</li>
+<li>ipdb: #306 &#8211; support net_ns_pid</li>
+<li>ipdb: #307 &#8211; fix IPv6 routes management</li>
+<li>ipdb: #311 &#8211; vlan interfaces address loading</li>
+<li>iprsocket: #305 &#8211; support NETLINK_LISTEN_ALL_NSID</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.10</dt>
+<dd><ul class="first last simple">
+<li>devlink: fix fd leak on broken init</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.9</dt>
+<dd><ul class="first last simple">
+<li>sock_diag: initial NETLINK_SOCK_DIAG support</li>
+<li>rtnl: fix critical fd leak in the compat code</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.8</dt>
+<dd><ul class="first last simple">
+<li>rtnl: compat proxying fix</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.7</dt>
+<dd><ul class="first last simple">
+<li>rtnl: compat code is back</li>
+<li>netns: custom netns path support</li>
+<li>ipset: multiple improvements</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.6</dt>
+<dd><ul class="first last simple">
+<li>ipdb: #278 &#8211; fix initial ports mapping</li>
+<li>ipset: #277 &#8211; fix ADT attributes parsing</li>
+<li>nl80211: #274, #275, #276 &#8211; BSS-related fixes</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.5</dt>
+<dd><ul class="first last simple">
+<li>ifinfmsg: GTP interfaces support</li>
+<li>generic: devlink protocol support</li>
+<li>generic: code cleanup</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.4</dt>
+<dd><ul class="first last simple">
+<li>iproute: #262 &#8211; <cite>get_vlans()</cite> fix</li>
+<li>iproute: default mask 32 for IPv4 in <cite>addr()</cite></li>
+<li>rtmsg: #260 &#8211; RTA_FLOW support</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.3</dt>
+<dd><ul class="first last simple">
+<li>ipdb: #259 &#8211; critical <cite>Interface</cite> class fix</li>
+<li>benchmark: initial release</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.2</dt>
+<dd><ul class="first last simple">
+<li>ipdb: event modules</li>
+<li>ipdb: on-demand views</li>
+<li>ipdb: rules management</li>
+<li>ipdb: bridge controls</li>
+<li>ipdb: #258 &#8211; important Python compatibility fixes</li>
+<li>netns: #257 &#8211; pipe leak fix</li>
+<li>netlink: support pickling for nlmsg</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.1</dt>
+<dd><ul class="first last simple">
+<li>netlink: no buffer copying in the parser</li>
+<li>netlink: parse NLA on demand</li>
+<li>ipdb: #244 &#8211; lwtunnel multipath fixes</li>
+<li>iproute: #235 &#8211; route types</li>
+<li>docs updated</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.4.0</dt>
+<dd><ul class="first last simple">
+<li>ACHTUNG: old kernels compatibility code is dropped</li>
+<li>ACHTUNG: IPDB uses two separate sockets for monitoring and commands</li>
+<li>ipdb: #244 &#8211; multipath lwtunnel</li>
+<li>ipdb: #242 &#8211; AF_MPLS routes</li>
+<li>ipdb: #241, #234 &#8211; fix create(..., reuse=True)</li>
+<li>ipdb: #239 &#8211; route encap and metrics fixed</li>
+<li>ipdb: #238 &#8211; generic port management</li>
+<li>ipdb: #235 &#8211; support route scope and type</li>
+<li>ipdb: #230, #232 &#8211; routes GC (work in progress)</li>
+<li>rtnl: #245 &#8211; do not fail if <cite>/proc/net/psched</cite> doesn&#8217;t exist</li>
+<li>rtnl: #233 &#8211; support VRF interfaces (requires net-next)</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.21</dt>
+<dd><ul class="first last simple">
+<li>ipdb: #231 &#8211; return <cite>ipdb.common</cite> as deprecated</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.20</dt>
+<dd><ul class="first last simple">
+<li>iproute: <cite>vlan_filter()</cite></li>
+<li>iproute: #229 &#8211; FDB management</li>
+<li>general: exceptions re-exported via the root module</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.19</dt>
+<dd><ul class="first last simple">
+<li>rtmsg: #227 &#8211; MPLS lwtunnel basic support</li>
+<li>iproute: <cite>route()</cite> docs updated</li>
+<li>general: #228 &#8211; exceptions layout changed</li>
+<li>package-rh: rpm subpackages</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.18</dt>
+<dd><ul class="first last simple">
+<li>version bump &#8211; include docs in the release tarball</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.17</dt>
+<dd><ul class="first last simple">
+<li>tcmsg: qdiscs and filters as plugins</li>
+<li>tcmsg: #223 &#8211; tc clsact and bpf direct-action</li>
+<li>tcmsg: plug, codel, choke, drr qdiscs</li>
+<li>tests: CI in VMs (see civm project)</li>
+<li>tests: xunit output</li>
+<li>ifinfmsg: tuntap support in i386, i686</li>
+<li>ifinfmsg: #207 &#8211; support vlan filters</li>
+<li>examples: #226 &#8211; included in the release tarball</li>
+<li>ipdb: partial commits, initial support</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.16</dt>
+<dd><ul class="first last simple">
+<li>ipdb: fix the multiple IPs in one commit case</li>
+<li>rtnl: support veth peer attributes</li>
+<li>netns: support 32bit i686</li>
+<li>netns: fix MIPS support</li>
+<li>netns: fix tun/tap creation</li>
+<li>netns: fix interface move between namespaces</li>
+<li>tcmsg: support hfsc, fq_codel, codel qdiscs</li>
+<li>nftables: initial support</li>
+<li>netlink: dump/load messages to/from simple types</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.15</dt>
+<dd><ul class="first last simple">
+<li>netns: #194 &#8211; fix fd leak</li>
+<li>iproute: #184 &#8211; fix routes dump</li>
+<li>rtnl: TCA_ACT_BPF support</li>
+<li>rtnl: ipvlan support</li>
+<li>rtnl: OVS support removed</li>
+<li>iproute: rule() improved to support all NLAs</li>
+<li>project supported by Ericsson</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.14</dt>
+<dd><ul class="first last simple">
+<li>package-rh: spec fixed</li>
+<li>package-rh: both licenses added</li>
+<li>remote: fixed the setup.py record</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.13</dt>
+<dd><ul class="first last simple">
+<li>package-rh: new rpm for Fedora and CentOS</li>
+<li>remote: new draft of the remote protocol</li>
+<li>netns: refactored using the new remote protocol</li>
+<li>ipdb: gretap support</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.12</dt>
+<dd><ul class="first last simple">
+<li>ipdb: new <cite>Interface.wait_ip()</cite> routine</li>
+<li>ipdb: #175 &#8211; fix <cite>master</cite> attribute cleanup</li>
+<li>ipdb: #171 &#8211; support multipath routes</li>
+<li>ipdb: memory consumption improvements</li>
+<li>rtmsg: MPLS support</li>
+<li>rtmsg: RTA_VIA support</li>
+<li>iwutil: #174 &#8211; fix FREQ_FIXED flag</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.11</dt>
+<dd><ul class="first last simple">
+<li>ipdb: #161 &#8211; fix memory allocations</li>
+<li>nlsocket: #161 &#8211; remove monitor mode</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.10</dt>
+<dd><ul class="first last simple">
+<li>rtnl: added BPF filters</li>
+<li>rtnl: LWtunnel support in ifinfmsg</li>
+<li>ipdb: support address attributes</li>
+<li>ipdb: global transactions, initial version</li>
+<li>ipdb: routes refactored to use key index (speed up)</li>
+<li>config: eventlet support embedded (thanks to Angus Lees)</li>
+<li>iproute: replace tc classes</li>
+<li>iproute: flush_addr(), flush_rules()</li>
+<li>iproute: rule() refactored</li>
+<li>netns: proxy file objects (stdin, stdout, stderr)</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.9</dt>
+<dd><ul class="first last simple">
+<li>root imports: #109, #135 &#8211; <cite>issubclass</cite>, <cite>isinstance</cite></li>
+<li>iwutil: multiple improvements</li>
+<li>iwutil: initial tests</li>
+<li>proxy: correctly forward NetlinkError</li>
+<li>iproute: neighbour tables support</li>
+<li>iproute: #147, filters on dump calls</li>
+<li>config: initial usage of <cite>capabilities</cite></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.8</dt>
+<dd><ul class="first last simple">
+<li>docs: inheritance diagrams</li>
+<li>nlsocket: #126, #132 &#8211; resource deallocation</li>
+<li>arch: #128, #131 &#8211; MIPS support</li>
+<li>setup.py: #133 &#8211; syntax error during install on Python2</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.7</dt>
+<dd><ul class="first last simple">
+<li>ipdb: new routing syntax</li>
+<li>ipdb: sync interface movement between namespaces</li>
+<li>ipdb: #125 &#8211; fix route metrics</li>
+<li>netns: new class NSPopen</li>
+<li>netns: #119 &#8211; i386 syscall</li>
+<li>netns: #122 &#8211; return correct errno</li>
+<li>netlink: #126 &#8211; fix socket reuse</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.6</dt>
+<dd><ul class="first last simple">
+<li>dhcp: initial release DHCPv4</li>
+<li>license: dual GPLv2+ and Apache v2.0</li>
+<li>ovs: port add/delete</li>
+<li>macvlan, macvtap: basic support</li>
+<li>vxlan: basic support</li>
+<li>ipset: basic support</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.5</dt>
+<dd><ul class="first last simple">
+<li>netns: #90 &#8211; netns setns support</li>
+<li>generic: #99 &#8211; support custom basic netlink socket classes</li>
+<li>proxy-ng: #106 &#8211; provide more diagnostics</li>
+<li>nl80211: initial nl80211 support, iwutil module added</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.4</dt>
+<dd><ul class="first last simple">
+<li>ipdb: #92 &#8211; route metrics support</li>
+<li>ipdb: #85 &#8211; broadcast address specification</li>
+<li>ipdb, rtnl: #84 &#8211; veth support</li>
+<li>ipdb, rtnl: tuntap support</li>
+<li>netns: #84 &#8211; network namespaces support, NetNS class</li>
+<li>rtnl: proxy-ng API</li>
+<li>pypi: #91 &#8211; embed docs into the tarball</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.3</dt>
+<dd><ul class="first last simple">
+<li>ipdb: restart on error</li>
+<li>generic: handle non-existing family case</li>
+<li>[fix]: #80 &#8211; Python 2.6 unicode vs -O bug workaround</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.2</dt>
+<dd><ul class="first last simple">
+<li>simple socket architecture</li>
+<li>all the protocols now are based on NetlinkSocket, see examples</li>
+<li>rpc: deprecated</li>
+<li>iocore: deprecated</li>
+<li>iproute: single-threaded socket object</li>
+<li>ipdb: restart on errors</li>
+<li>rtnl: updated ifinfmsg policies</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.3.1</dt>
+<dd><ul class="first last simple">
+<li>module structure refactored</li>
+<li>new protocol: ipq</li>
+<li>new protocol: nfnetlink / nf-queue</li>
+<li>new protocol: generic</li>
+<li>threadless sockets for all the protocols</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.16</dt>
+<dd><ul class="first last simple">
+<li>prepare the transition to 0.3.x</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.15</dt>
+<dd><ul class="first last simple">
+<li>ipdb: fr #63 &#8211; interface settings freeze</li>
+<li>ipdb: fr #50, #51 &#8211; bridge &amp; bond options (initial version)</li>
+<li>RHEL7 support</li>
+<li>[fix]: #52 &#8211; HTB: correct rtab compilation</li>
+<li>[fix]: #53 &#8211; RHEL6.5 bridge races</li>
+<li>[fix]: #55 &#8211; IPv6 on bridges</li>
+<li>[fix]: #58 &#8211; vlans as bridge ports</li>
+<li>[fix]: #59 &#8211; threads sync in iocore</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.14</dt>
+<dd><ul class="first last simple">
+<li>[fix]: #44 &#8211; incorrect netlink exceptions proxying</li>
+<li>[fix]: #45 &#8211; multiple issues with device targets</li>
+<li>[fix]: #46 &#8211; consistent exceptions</li>
+<li>ipdb: LinkedSet cascade updates fixed</li>
+<li>ipdb: allow to reuse existing interface in <cite>create()</cite></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.13</dt>
+<dd><ul class="first last simple">
+<li>[fix]: #43 &#8211; pipe leak in the main I/O loop</li>
+<li>tests: integrate examples, import into tests</li>
+<li>iocore: use own TimeoutException instead of Queue.Empty</li>
+<li>iproute: default routing table = 254</li>
+<li>iproute: flush_routes() routine</li>
+<li>iproute: fwmark parameter for rule() routine</li>
+<li>iproute: destination and mask for rules</li>
+<li>docs: netlink development guide</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.12</dt>
+<dd><ul class="first last simple">
+<li>[fix]: #33 &#8211; release resources only for bound sockets</li>
+<li>[fix]: #37 &#8211; fix commit targets</li>
+<li>rtnl: HFSC support</li>
+<li>rtnl: priomap fixed</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.11</dt>
+<dd><ul class="first last simple">
+<li>ipdb: watchdogs to sync on RTNL events</li>
+<li>ipdb: fix commit errors</li>
+<li>generic: NLA operations, complement and intersection</li>
+<li>docs: more autodocs in the code</li>
+<li>tests: -W error: more strict testing now</li>
+<li>tests: cover examples by the integration testing cycle</li>
+<li>with -W error many resource leaks were fixed</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.10</dt>
+<dd><ul class="first last simple">
+<li>ipdb: command chaining</li>
+<li>ipdb: fix for RHEL6.5 Python &#8220;optimizations&#8221;</li>
+<li>rtnl: support TCA_U32_ACT</li>
+<li>[fix]: #32 &#8211; NLA comparison</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.9</dt>
+<dd><ul class="first last simple">
+<li>ipdb: support bridges and bonding interfaces on RHEL</li>
+<li>ipdb: &#8220;shadow&#8221; interfaces (still in alpha state)</li>
+<li>ipdb: minor fixes on routing and compat issues</li>
+<li>ipdb: as a separate package (sub-module)</li>
+<li>docs: include ipdb autodocs</li>
+<li>rpc: include in setup.py</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.8</dt>
+<dd><ul class="first last simple">
+<li>netlink: allow multiple NetlinkSocket allocation from one process</li>
+<li>netlink: fix defragmentation for netlink-over-tcp</li>
+<li>iocore: support forked IOCore and IOBroker as a separate process</li>
+<li>ipdb: generic callbacks support</li>
+<li>ipdb: routing support</li>
+<li>rtnl: #30 &#8211; support IFLA_INFO_DATA for bond interfaces</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.7</dt>
+<dd><ul class="first last simple">
+<li>ipdb: use separate namespaces for utility functions and other stuff</li>
+<li>ipdb: generic callbacks (see also IPDB.wait_interface())</li>
+<li>iocore: initial multipath support</li>
+<li>iocore: use of 16byte uuid4 for packet ids</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.6</dt>
+<dd><ul class="first last simple">
+<li>rpc: initial version, REQ/REP, PUSH/PULL</li>
+<li>iocore: shared IOLoop</li>
+<li>iocore: AddrPool usage</li>
+<li>iproute: policing in FW filter</li>
+<li>python3 compatibility issues fixed</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.4</dt>
+<dd><ul class="first last simple">
+<li>python3 compatibility issues fixed, tests passed</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.3</dt>
+<dd><ul class="first last simple">
+<li>[fix]: #28 &#8211; bundle issue</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.2.2</dt>
+<dd><ul class="first last simple">
+<li>iocore: new component</li>
+<li>iocore: separate IOCore and IOBroker</li>
+<li>iocore: change from peer-to-peer to flat addresses</li>
+<li>iocore: REP/REQ, PUSH/PULL</li>
+<li>iocore: support for UDP PUSH/PULL</li>
+<li>iocore: AddrPool component for addresses and nonces</li>
+<li>generic: allow multiple re-encoding</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.12</dt>
+<dd><ul class="first last simple">
+<li>ipdb: transaction commit callbacks</li>
+<li>iproute: delete root qdisc (&#64;chantra)</li>
+<li>iproute: netem qdisc management (&#64;chantra)</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.11</dt>
+<dd><ul class="first last simple">
+<li>netlink: get qdiscs for particular interface</li>
+<li>netlink: IPRSocket threadless objects</li>
+<li>rtnl: u32 policy setup</li>
+<li>iproute: filter actions, such as <cite>ok</cite>, <cite>drop</cite> and so on</li>
+<li>iproute: changed syntax of commands, <cite>action</cite> → <cite>command</cite></li>
+<li>tests: htb, tbf tests added</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.10</dt>
+<dd><ul class="first last simple">
+<li>[fix]: #8 &#8211; default route fix, routes filtering</li>
+<li>[fix]: #9 &#8211; add/delete route routine improved</li>
+<li>[fix]: #10 &#8211; shutdown sequence fixed</li>
+<li>[fix]: #11 &#8211; close IPC pipes on release()</li>
+<li>[fix]: #12 &#8211; stop service threads on release()</li>
+<li>netlink: debug mode added to be used with GUI</li>
+<li>ipdb: interface removal</li>
+<li>ipdb: fail on transaction sync timeout</li>
+<li>tests: R/O mode added, use <cite>export PYROUTE2_TESTS_RO=True</cite></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.9</dt>
+<dd><ul class="first last simple">
+<li>tests: all races fixed</li>
+<li>ipdb: half-sync commit(): wait for IPs and ports lists update</li>
+<li>netlink: use pipes for in-process communication</li>
+<li>Python 2.6 compatibility issue: remove copy.deepcopy() usage</li>
+<li>QPython 2.7 for Android: works</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.8</dt>
+<dd><ul class="first last simple">
+<li>complete refactoring of class names</li>
+<li>Python 2.6 compatibility issues</li>
+<li>tests: code coverage, multiple code fixes</li>
+<li>plugins: ptrace message source</li>
+<li>packaging: RH package</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.7</dt>
+<dd><ul class="first last simple">
+<li>ipdb: interface creation: dummy, bond, bridge, vlan</li>
+<li>ipdb: if_slaves interface obsoleted</li>
+<li>ipdb: &#8216;direct&#8217; mode</li>
+<li>iproute: code refactored</li>
+<li>examples: create() examples committed</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.6</dt>
+<dd><ul class="first last simple">
+<li>netlink: tc ingress, sfq, tbf, htb, u32 partial support</li>
+<li>ipdb: completely re-implemented transactional model (see docs)</li>
+<li>generic: internal fields declaration API changed for nlmsg</li>
+<li>tests: first unit tests committed</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.5</dt>
+<dd><ul class="first last simple">
+<li>netlink: dedicated io buffering thread</li>
+<li>netlink: messages reassembling</li>
+<li>netlink: multi-uplink remote</li>
+<li>netlink: masquerade remote requests</li>
+<li>ipdb: represent interfaces hierarchy</li>
+<li>iproute: decode VLAN info</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.4</dt>
+<dd><ul class="first last simple">
+<li>netlink: remote netlink access</li>
+<li>netlink: SSL/TLS server/client auth support</li>
+<li>netlink: tcp and unix transports</li>
+<li>docs: started sphinx docs</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.3</dt>
+<dd><ul class="first last simple">
+<li>ipdb: context manager interface</li>
+<li>ipdb: [fix] correctly handle ip addr changes in transaction</li>
+<li>ipdb: [fix] make up()/down() methods transactional [#1]</li>
+<li>iproute: mirror packets to 0 queue</li>
+<li>iproute: [fix] handle primary ip address removal response</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.2</dt>
+<dd><ul class="first last simple">
+<li>initial ipdb version</li>
+<li>iproute fixes</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>0.1.1</dt>
+<dd><ul class="first last simple">
+<li>initial release, iproute module</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="general.html"
+                        title="previous chapter">pyroute2</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="makefile.html"
+                        title="next chapter">makefile documentation</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/changelog.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="makefile.html" title="makefile documentation"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="general.html" title="pyroute2"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

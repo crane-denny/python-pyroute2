@@ -1,0 +1,432 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Netns management overview &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="MPLS howto" href="mpls.html" />
+    <link rel="prev" title="IPDB module" href="ipdb.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="mpls.html" title="MPLS howto"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="ipdb.html" title="IPDB module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <span class="target" id="module-pyroute2.netns"></span><div class="section" id="netns-management-overview">
+<h1>Netns management overview<a class="headerlink" href="#netns-management-overview" title="Permalink to this headline">¶</a></h1>
+<p>Pyroute2 provides basic namespaces management support.
+Here&#8217;s a quick overview of typical netns tasks and
+related pyroute2 tools.</p>
+<div class="section" id="move-an-interface-to-a-namespace">
+<h2>Move an interface to a namespace<a class="headerlink" href="#move-an-interface-to-a-namespace" title="Permalink to this headline">¶</a></h2>
+<p>Though this task is managed not via <cite>netns</cite> module, it
+should be mentioned here as well. To move an interface
+to a netns, one should provide IFLA_NET_NS_FD nla in
+a set link RTNL request. The nla is an open FD number,
+that refers to already created netns. The pyroute2
+library provides also a possibility to specify not a
+FD number, but a netns name as a string. In that case
+the library will try to lookup the corresponding netns
+in the standard location.</p>
+<p>Create veth and move the peer to a netns with IPRoute:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+<span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p0&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;veth&#39;</span><span class="p">,</span> <span class="n">peer</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)</span>
+<span class="n">idx</span> <span class="o">=</span> <span class="n">ipr</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;set&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span> <span class="n">net_ns_fd</span><span class="o">=</span><span class="s1">&#39;netns_name&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Create veth and move the peer to a netns with IPDB:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+<span class="n">ipdb</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">()</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p0&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;veth&#39;</span><span class="p">,</span> <span class="n">peer</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">v0p1</span> <span class="k">as</span> <span class="n">i</span><span class="p">:</span>
+    <span class="n">i</span><span class="o">.</span><span class="n">net_ns_fd</span> <span class="o">=</span> <span class="s1">&#39;netns_name&#39;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="manage-interfaces-within-a-netns">
+<h2>Manage interfaces within a netns<a class="headerlink" href="#manage-interfaces-within-a-netns" title="Permalink to this headline">¶</a></h2>
+<p>This task can be done with <cite>NetNS</cite> objects. A <cite>NetNS</cite> object
+spawns a child and runs it within a netns, providing the same
+API as <cite>IPRoute</cite> does:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<span class="n">ns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;netns_name&#39;</span><span class="p">)</span>
+<span class="c1"># do some stuff within the netns</span>
+<span class="n">ns</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>One can even start <cite>IPDB</cite> on the top of <cite>NetNS</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+<span class="n">ipdb</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">nl</span><span class="o">=</span><span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;netns_name&#39;</span><span class="p">))</span>
+<span class="c1"># do some stuff within the netns</span>
+<span class="n">ipdb</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="spawn-a-process-within-a-netns">
+<h2>Spawn a process within a netns<a class="headerlink" href="#spawn-a-process-within-a-netns" title="Permalink to this headline">¶</a></h2>
+<p>For that purpose one can use <cite>NSPopen</cite> API. It works just
+as normal <cite>Popen</cite>, but starts a process within a netns.</p>
+</div>
+<div class="section" id="list-set-create-and-remove-netns">
+<h2>List, set, create and remove netns<a class="headerlink" href="#list-set-create-and-remove-netns" title="Permalink to this headline">¶</a></h2>
+<p>These functions are described below. To use them, import
+<cite>netns</cite> module:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">netns</span>
+<span class="n">netns</span><span class="o">.</span><span class="n">listnetns</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Please be aware, that in order to run system calls the
+library uses <cite>ctypes</cite> module. It can fail on platforms
+where SELinux is enforced. If the Python interpreter,
+loading this module, dumps the core, one can check the
+SELinux state with <cite>getenforce</cite> command.</p>
+<dl class="function">
+<dt id="pyroute2.netns.create">
+<code class="descclassname">pyroute2.netns.</code><code class="descname">create</code><span class="sig-paren">(</span><em>netns</em>, <em>libc=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.create" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a network namespace.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyroute2.netns.listnetns">
+<code class="descclassname">pyroute2.netns.</code><code class="descname">listnetns</code><span class="sig-paren">(</span><em>nspath=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.listnetns" title="Permalink to this definition">¶</a></dt>
+<dd><p>List available network namespaces.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyroute2.netns.remove">
+<code class="descclassname">pyroute2.netns.</code><code class="descname">remove</code><span class="sig-paren">(</span><em>netns</em>, <em>libc=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.remove" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove a network namespace.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyroute2.netns.setns">
+<code class="descclassname">pyroute2.netns.</code><code class="descname">setns</code><span class="sig-paren">(</span><em>netns</em>, <em>flags=64</em>, <em>libc=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.setns" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set netns for the current process.</p>
+<p>The flags semantics is the same as for the <cite>open(2)</cite>
+call:</p>
+<blockquote>
+<div><ul class="simple">
+<li>O_CREAT &#8211; create netns, if doesn&#8217;t exist</li>
+<li>O_CREAT | O_EXCL &#8211; create only if doesn&#8217;t exist</li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+</div>
+</div>
+<span class="target" id="module-pyroute2.netns.nslink"></span><div class="section" id="netns">
+<h1>NetNS<a class="headerlink" href="#netns" title="Permalink to this headline">¶</a></h1>
+<p>A NetNS object is IPRoute-like. It runs in the main network
+namespace, but also creates a proxy process running in
+the required netns. All the netlink requests are done via
+that proxy process.</p>
+<p>NetNS supports standard IPRoute API, so can be used instead
+of IPRoute, e.g., in IPDB:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># start the main network settings database:</span>
+<span class="n">ipdb_main</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">()</span>
+<span class="c1"># start the same for a netns:</span>
+<span class="n">ipdb_test</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">nl</span><span class="o">=</span><span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">))</span>
+
+<span class="c1"># create VETH</span>
+<span class="n">ipdb_main</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p0&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;veth&#39;</span><span class="p">,</span> <span class="n">peer</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+<span class="c1"># move peer VETH into the netns</span>
+<span class="k">with</span> <span class="n">ipdb_main</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">v0p1</span> <span class="k">as</span> <span class="n">veth</span><span class="p">:</span>
+    <span class="n">veth</span><span class="o">.</span><span class="n">net_ns_fd</span> <span class="o">=</span> <span class="s1">&#39;test&#39;</span>
+
+<span class="c1"># please keep in mind, that netns move clears all the settings</span>
+<span class="c1"># on a VETH interface pair, so one should run netns assignment</span>
+<span class="c1"># as a separate operation only</span>
+
+<span class="c1"># assign addresses</span>
+<span class="c1"># please notice, that `v0p1` is already in the `test` netns,</span>
+<span class="c1"># so should be accessed via `ipdb_test`</span>
+<span class="k">with</span> <span class="n">ipdb_main</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">v0p0</span> <span class="k">as</span> <span class="n">veth</span><span class="p">:</span>
+    <span class="n">veth</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;172.16.200.1/24&#39;</span><span class="p">)</span>
+    <span class="n">veth</span><span class="o">.</span><span class="n">up</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">ipdb_test</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">v0p1</span> <span class="k">as</span> <span class="n">veth</span><span class="p">:</span>
+    <span class="n">veth</span><span class="o">.</span><span class="n">add_ip</span><span class="p">(</span><span class="s1">&#39;172.16.200.2/24&#39;</span><span class="p">)</span>
+    <span class="n">veth</span><span class="o">.</span><span class="n">up</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Please review also the test code, under <cite>tests/test_netns.py</cite> for
+more examples.</p>
+<p>By default, NetNS creates requested netns, if it doesn&#8217;t exist,
+or uses existing one. To control this behaviour, one can use flags
+as for <cite>open(2)</cite> system call:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># create a new netns or fail, if it already exists</span>
+<span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">O_CREAT</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">O_EXIST</span><span class="p">)</span>
+
+<span class="c1"># create a new netns or use existing one</span>
+<span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">O_CREAT</span><span class="p">)</span>
+
+<span class="c1"># the same as above, the default behaviour</span>
+<span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To remove a network namespace:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">)</span>
+<span class="n">netns</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="n">netns</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>One should stop it first with <cite>close()</cite>, and only after that
+run <cite>remove()</cite>.</p>
+<dl class="class">
+<dt id="pyroute2.netns.nslink.NetNS">
+<em class="property">class </em><code class="descclassname">pyroute2.netns.nslink.</code><code class="descname">NetNS</code><span class="sig-paren">(</span><em>netns</em>, <em>flags=64</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.nslink.NetNS" title="Permalink to this definition">¶</a></dt>
+<dd><p>NetNS is the IPRoute API with network namespace support.</p>
+<p><strong>Why not IPRoute?</strong></p>
+<p>The task to run netlink commands in some network namespace, being in
+another network namespace, requires the architecture, that differs
+too much from a simple Netlink socket.</p>
+<p>NetNS starts a proxy process in a network namespace and uses
+<cite>multiprocessing</cite> communication channels between the main and the proxy
+processes to route all <cite>recv()</cite> and <cite>sendto()</cite> requests/responses.</p>
+<p><strong>Any specific API calls?</strong></p>
+<p>Nope. <cite>NetNS</cite> supports all the same, that <cite>IPRoute</cite> does, in the same
+way. It provides full <cite>socket</cite>-compatible API and can be used in
+poll/select as well.</p>
+<p>The only difference is the <cite>close()</cite> call. In the case of <cite>NetNS</cite> it
+is <strong>mandatory</strong> to close the socket before exit.</p>
+<p><strong>NetNS and IPDB</strong></p>
+<p>It is possible to run IPDB with NetNS:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+
+<span class="n">ip</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">nl</span><span class="o">=</span><span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;somenetns&#39;</span><span class="p">))</span>
+<span class="o">...</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Do not forget to call <cite>release()</cite> when the work is done. It will shut
+down <cite>NetNS</cite> instance as well.</p>
+<dl class="method">
+<dt id="pyroute2.netns.nslink.NetNS.remove">
+<code class="descname">remove</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.nslink.NetNS.remove" title="Permalink to this definition">¶</a></dt>
+<dd><p>Try to remove this network namespace from the system.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="pyroute2.netns.nslink.NetNServer">
+<code class="descclassname">pyroute2.netns.nslink.</code><code class="descname">NetNServer</code><span class="sig-paren">(</span><em>netns</em>, <em>cmdch</em>, <em>brdch</em>, <em>flags=64</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.nslink.NetNServer" title="Permalink to this definition">¶</a></dt>
+<dd><p>The netns server supposed to be started automatically by NetNS.
+It has two communication channels: one simplex to forward incoming
+netlink packets, <cite>rcvch</cite>, and other synchronous duplex to get
+commands and send back responses, <cite>cmdch</cite>.</p>
+<p>Channels should support standard socket API, should be compatible
+with poll/select and should be able to transparently pickle objects.
+NetNS uses <cite>multiprocessing.Pipe</cite> for this purpose, but it can be
+any other implementation with compatible API.</p>
+<p>The first parameter, <cite>netns</cite>, is a netns name. Depending on the
+<cite>flags</cite>, the netns can be created automatically. The <cite>flags</cite> semantics
+is exactly the same as for <cite>open(2)</cite> system call.</p>
+<p>...</p>
+<p>The server workflow is simple. The startup sequence:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>1. Create or open a netns.
+
+2. Start `IPRoute` instance. It will be used only on the low level,
+   the `IPRoute` will not parse any packet.
+
+3. Start poll/select loop on `cmdch` and `IPRoute`.
+</pre></div>
+</div>
+<p>On the startup, the server sends via <cite>cmdch</cite> the status packet. It can be
+<cite>None</cite> if all is OK, or some exception.</p>
+<p>Further data handling, depending on the channel, server side:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>1. `IPRoute`: read an incoming netlink packet and send it unmodified
+   to the peer via `rcvch`. The peer, polling `rcvch`, can handle
+   the packet on its side.
+
+2. `cmdch`: read tuple (cmd, argv, kwarg). If the `cmd` starts with
+   &quot;send&quot;, then take `argv[0]` as a packet buffer, treat it as one
+   netlink packet and substitute PID field (offset 12, uint32) with
+   its own. Strictly speaking, it is not mandatory for modern netlink
+   implementations, but it is required by the protocol standard.
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+<span class="target" id="module-pyroute2.netns.process.proxy"></span><div class="section" id="nspopen">
+<h1>NSPopen<a class="headerlink" href="#nspopen" title="Permalink to this headline">¶</a></h1>
+<p>The <cite>NSPopen</cite> class has nothing to do with netlink at
+all, but it is required to have a reasonable network
+namespace support.</p>
+<dl class="class">
+<dt id="pyroute2.netns.process.proxy.NSPopen">
+<em class="property">class </em><code class="descclassname">pyroute2.netns.process.proxy.</code><code class="descname">NSPopen</code><span class="sig-paren">(</span><em>nsname</em>, <em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.process.proxy.NSPopen" title="Permalink to this definition">¶</a></dt>
+<dd><p>A proxy class to run <cite>Popen()</cite> object in some network namespace.</p>
+<p>Sample to run <cite>ip ad</cite> command in <cite>nsname</cite> network namespace:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">nsp</span> <span class="o">=</span> <span class="n">NSPopen</span><span class="p">(</span><span class="s1">&#39;nsname&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">,</span> <span class="s1">&#39;ad&#39;</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">nsp</span><span class="o">.</span><span class="n">communicate</span><span class="p">())</span>
+<span class="n">nsp</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+<span class="n">nsp</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The <cite>NSPopen</cite> class was intended to be a drop-in replacement
+for the <cite>Popen</cite> class, but there are still some important
+differences.</p>
+<p>The <cite>NSPopen</cite> object implicitly spawns a child python process
+to be run in the background in a network namespace. The target
+process specified as the argument of the <cite>NSPopen</cite> will be
+started in its turn from this child. Thus all the fd numbers
+of the running <cite>NSPopen</cite> object are meaningless in the context
+of the main process. Trying to operate on them, one will get
+&#8216;Bad file descriptor&#8217; in the best case or a system call working
+on a wrong file descriptor in the worst case. A possible
+solution would be to transfer file descriptors between the
+<cite>NSPopen</cite> object and the main process, but it is not implemented
+yet.</p>
+<p>The process&#8217; diagram for <cite>NSPopen(&#8216;test&#8217;, [&#8216;ip&#8217;, &#8216;ad&#8217;])</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>+---------------------+     +--------------+     +------------+
+| main python process |&lt;---&gt;| child python |&lt;---&gt;| netns test |
+| NSPopen()           |     | Popen()      |     | $ ip ad    |
++---------------------+     +--------------+     +------------+
+</pre></div>
+</div>
+<p>As a workaround for the issue with file descriptors, some
+additional methods are available on file objects <cite>stdin</cite>,
+<cite>stdout</cite> and <cite>stderr</cite>. E.g., one can run fcntl calls:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">fcntl</span> <span class="k">import</span> <span class="n">F_GETFL</span>
+<span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NSPopen</span>
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="k">import</span> <span class="n">PIPE</span>
+
+<span class="n">proc</span> <span class="o">=</span> <span class="n">NSPopen</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;my_program&#39;</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">PIPE</span><span class="p">)</span>
+<span class="n">flags</span> <span class="o">=</span> <span class="n">proc</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">fcntl</span><span class="p">(</span><span class="n">F_GETFL</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In that way one can use <cite>fcntl()</cite>, <cite>ioctl()</cite>, <cite>flock()</cite> and
+<cite>lockf()</cite> calls.</p>
+<p>Another additional method is <cite>release()</cite>, which can be used to
+explicitly stop the proxy process and release all the resources.</p>
+<dl class="method">
+<dt id="pyroute2.netns.process.proxy.NSPopen.release">
+<code class="descname">release</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.process.proxy.NSPopen.release" title="Permalink to this definition">¶</a></dt>
+<dd><p>Explicitly stop the proxy process and release all the
+resources. The <cite>NSPopen</cite> object can not be used after
+the <cite>release()</cite> call.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Netns management overview</a><ul>
+<li><a class="reference internal" href="#move-an-interface-to-a-namespace">Move an interface to a namespace</a></li>
+<li><a class="reference internal" href="#manage-interfaces-within-a-netns">Manage interfaces within a netns</a></li>
+<li><a class="reference internal" href="#spawn-a-process-within-a-netns">Spawn a process within a netns</a></li>
+<li><a class="reference internal" href="#list-set-create-and-remove-netns">List, set, create and remove netns</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#netns">NetNS</a></li>
+<li><a class="reference internal" href="#nspopen">NSPopen</a></li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="ipdb.html"
+                        title="previous chapter">IPDB module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="mpls.html"
+                        title="next chapter">MPLS howto</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/netns.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="mpls.html" title="MPLS howto"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="ipdb.html" title="IPDB module"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

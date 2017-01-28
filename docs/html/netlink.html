@@ -1,0 +1,501 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Netlink &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="Base netlink socket and marshal" href="nlsocket.html" />
+    <link rel="prev" title="Module architecture" href="arch.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="nlsocket.html" title="Base netlink socket and marshal"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="arch.html" title="Module architecture"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <span class="target" id="module-pyroute2.netlink"></span><div class="section" id="netlink">
+<h1>Netlink<a class="headerlink" href="#netlink" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="basics">
+<h2>basics<a class="headerlink" href="#basics" title="Permalink to this headline">¶</a></h2>
+<p>General netlink packet structure:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">nlmsg</span> <span class="n">packet</span><span class="p">:</span>
+    <span class="n">header</span>
+    <span class="n">data</span>
+</pre></div>
+</div>
+<p>Generic netlink message header:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">nlmsg</span> <span class="n">header</span><span class="p">:</span>
+    <span class="n">uint32</span> <span class="n">length</span>
+    <span class="n">uint16</span> <span class="nb">type</span>
+    <span class="n">uint16</span> <span class="n">flags</span>
+    <span class="n">uint32</span> <span class="n">sequence</span> <span class="n">number</span>
+    <span class="n">uint32</span> <span class="n">pid</span>
+</pre></div>
+</div>
+<p>The <cite>length</cite> field is the length of all the packet, including
+data and header. The <cite>type</cite> field is used to distinguish different
+message types, commands etc. Please note, that there is no
+explicit protocol field &#8211; you choose a netlink protocol, when
+you create a socket.</p>
+<p>The <cite>sequence number</cite> is very important. Netlink is an asynchronous
+protocol &#8211; it means, that the packet order doesn&#8217;t matter and is
+not guaranteed. But responses to a request are always marked with
+the same sequence number, so you can treat it as a cookie.</p>
+<p>Please keep in mind, that a netlink request can initiate a
+cascade of events, and netlink messages from these events can
+carry sequence number == 0. E.g., it is so when you remove a
+primary IP addr from an interface, when <cite>promote_secondaries</cite>
+sysctl is set.</p>
+<p>Beside of incapsulated headers and other protocol-specific data,
+netlink messages can carry NLA (netlink attributes). NLA
+structure is as follows:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">NLA</span> <span class="n">header</span><span class="p">:</span>
+    <span class="n">uint16</span> <span class="n">length</span>
+    <span class="n">uint16</span> <span class="nb">type</span>
+<span class="n">NLA</span> <span class="n">data</span><span class="p">:</span>
+    <span class="n">data</span><span class="o">-</span><span class="n">specific</span> <span class="n">struct</span>
+    <span class="c1"># optional:</span>
+    <span class="n">NLA</span>
+    <span class="n">NLA</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>So, NLA structures can be nested, forming a tree.</p>
+<p>Complete structure of a netlink packet:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">nlmsg</span> <span class="n">header</span><span class="p">:</span>
+    <span class="n">uint32</span> <span class="n">length</span>
+    <span class="n">uint16</span> <span class="nb">type</span>
+    <span class="n">uint16</span> <span class="n">flags</span>
+    <span class="n">uint32</span> <span class="n">sequence</span> <span class="n">number</span>
+    <span class="n">uint32</span> <span class="n">pid</span>
+<span class="p">[</span> <span class="n">optional</span> <span class="n">protocol</span><span class="o">-</span><span class="n">specific</span> <span class="n">data</span> <span class="p">]</span>
+<span class="p">[</span> <span class="n">optional</span> <span class="n">NLA</span> <span class="n">tree</span> <span class="p">]</span>
+</pre></div>
+</div>
+<p>More information about netlink protocol you can find in
+the man pages.</p>
+</div>
+<div class="section" id="pyroute2-and-netlink">
+<h2>pyroute2 and netlink<a class="headerlink" href="#pyroute2-and-netlink" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="packets">
+<h3>packets<a class="headerlink" href="#packets" title="Permalink to this headline">¶</a></h3>
+<p>To simplify the development, pyroute2 provides an easy way to
+describe packet structure. As an example, you can take the
+ifaddrmsg description &#8211; <cite>pyroute2/netlink/rtnl/ifaddrmsg.py</cite>.</p>
+<p>To describe a packet, you need to inherit from <cite>nlmsg</cite> class:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2.netlink</span> <span class="k">import</span> <span class="n">nlmsg</span>
+
+<span class="k">class</span> <span class="nc">foo_msg</span><span class="p">(</span><span class="n">nlmsg</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">(</span> <span class="o">...</span> <span class="p">)</span>
+    <span class="n">nla_map</span> <span class="o">=</span> <span class="p">(</span> <span class="o">...</span> <span class="p">)</span>
+</pre></div>
+</div>
+<p>NLA are described in the same way, but the parent class should be
+<cite>nla</cite>, instead of <cite>nlmsg</cite>. And yes, it is important to use the
+proper parent class &#8211; it affects the header structure.</p>
+</div>
+<div class="section" id="fields-attribute">
+<h3>fields attribute<a class="headerlink" href="#fields-attribute" title="Permalink to this headline">¶</a></h3>
+<p>The <cite>fields</cite> attribute describes the structure of the
+protocol-specific data. It is a tuple of tuples, where each
+member contains a field name and its data format.</p>
+<p>Field data format should be specified as for Python <cite>struct</cite>
+module. E.g., ifaddrmsg structure:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">struct</span> <span class="n">ifaddrmsg</span> <span class="p">{</span>
+    <span class="n">__u8</span>  <span class="n">ifa_family</span><span class="p">;</span>
+    <span class="n">__u8</span>  <span class="n">ifa_prefixlen</span><span class="p">;</span>
+    <span class="n">__u8</span>  <span class="n">ifa_flags</span><span class="p">;</span>
+    <span class="n">__u8</span>  <span class="n">ifa_scope</span><span class="p">;</span>
+    <span class="n">__u32</span> <span class="n">ifa_index</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+<p>should be described as follows:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ifaddrmsg</span><span class="p">(</span><span class="n">nlmsg</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;family&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;prefixlen&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;flags&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;scope&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;index&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Format strings are passed directly to the <cite>struct</cite> module,
+so you can use all the notations like <cite>&gt;I</cite>, <cite>16s</cite> etc. All
+fields are parsed from the stream separately, so if you
+want to explicitly fix alignemt, as if it were C struct,
+use the <cite>pack</cite> attribute:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">tstats</span><span class="p">(</span><span class="n">nla</span><span class="p">):</span>
+    <span class="n">pack</span> <span class="o">=</span> <span class="s1">&#39;struct&#39;</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;version&#39;</span><span class="p">,</span> <span class="s1">&#39;H&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;ac_exitcode&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;ac_flag&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">),</span>
+              <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Explicit padding bytes also can be used, when struct
+packing doesn&#8217;t work well:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ipq_mode_msg</span><span class="p">(</span><span class="n">nlmsg</span><span class="p">):</span>
+    <span class="n">pack</span> <span class="o">=</span> <span class="s1">&#39;struct&#39;</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;__pad&#39;</span><span class="p">,</span> <span class="s1">&#39;7x&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;range&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;__pad&#39;</span><span class="p">,</span> <span class="s1">&#39;12x&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="nla-map-attribute">
+<h3>nla_map attribute<a class="headerlink" href="#nla-map-attribute" title="Permalink to this headline">¶</a></h3>
+<p>The <cite>nla_map</cite> attribute is a tuple of NLA descriptions. Each
+description is also a tuple in two different forms: either
+two fields, name and format, or three fields: type, name and
+format.</p>
+<p>Please notice, that the format field is a string name of
+corresponding NLA class:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ifaddrmsg</span><span class="p">(</span><span class="n">nlmsg</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="n">nla_map</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;IFA_UNSPEC&#39;</span><span class="p">,</span>  <span class="s1">&#39;hex&#39;</span><span class="p">),</span>
+               <span class="p">(</span><span class="s1">&#39;IFA_ADDRESS&#39;</span><span class="p">,</span> <span class="s1">&#39;ipaddr&#39;</span><span class="p">),</span>
+               <span class="p">(</span><span class="s1">&#39;IFA_LOCAL&#39;</span><span class="p">,</span> <span class="s1">&#39;ipaddr&#39;</span><span class="p">),</span>
+               <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This code will create mapping, where IFA_ADDRESS NLA will be of
+type 1 and IFA_LOCAL &#8211; of type 2, etc. Both NLA will be decoded
+as IP addresses (class <cite>ipaddr</cite>). IFA_UNSPEC will be of type 0,
+and if it will be in the NLA tree, it will be just dumped in hex.</p>
+<p>NLA class names are should be specified as strings, since they
+are resolved in runtime.</p>
+<p>There are several pre-defined NLA types, that you will get with
+<cite>nla</cite> class:</p>
+<blockquote>
+<div><ul class="simple">
+<li><cite>none</cite> &#8211; ignore this NLA</li>
+<li><cite>flag</cite> &#8211; boolean flag NLA (no payload; NLA exists = True)</li>
+<li><cite>uint8</cite>, <cite>uint16</cite>, <cite>uint32</cite>, <cite>uint64</cite> &#8211; unsigned int</li>
+<li><cite>be8</cite>, <cite>be16</cite>, <cite>be32</cite>, <cite>be64</cite> &#8211; big-endian unsigned int</li>
+<li><cite>ipaddr</cite> &#8211; IP address, IPv4 or IPv6</li>
+<li><cite>ip4addr</cite> &#8211; only IPv4 address type</li>
+<li><cite>ip6addr</cite> &#8211; only IPv6 address type</li>
+<li><cite>target</cite> &#8211; a univeral target (IPv4, IPv6, MPLS)</li>
+<li><cite>l2addr</cite> &#8211; MAC address</li>
+<li><cite>hex</cite> &#8211; hex dump as a string &#8211; useful for debugging</li>
+<li><cite>cdata</cite> &#8211; a binary data</li>
+<li><cite>string</cite> &#8211; UTF-8 string</li>
+<li><cite>asciiz</cite> &#8211; zero-terminated ASCII string, no decoding</li>
+<li><cite>array</cite> &#8211; array of simple types (uint8, uint16 etc.)</li>
+</ul>
+</div></blockquote>
+<p>Please refer to <cite>pyroute2/netlink/__init__.py</cite> for details.</p>
+<p>You can also make your own NLA descriptions:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ifaddrmsg</span><span class="p">(</span><span class="n">nlmsg</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="n">nla_map</span> <span class="o">=</span> <span class="p">(</span><span class="o">...</span>
+               <span class="p">(</span><span class="s1">&#39;IFA_CACHEINFO&#39;</span><span class="p">,</span> <span class="s1">&#39;cacheinfo&#39;</span><span class="p">),</span>
+               <span class="o">...</span><span class="p">)</span>
+
+    <span class="k">class</span> <span class="nc">cacheinfo</span><span class="p">(</span><span class="n">nla</span><span class="p">):</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;ifa_prefered&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">),</span>
+                  <span class="p">(</span><span class="s1">&#39;ifa_valid&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">),</span>
+                  <span class="p">(</span><span class="s1">&#39;cstamp&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">),</span>
+                  <span class="p">(</span><span class="s1">&#39;tstamp&#39;</span><span class="p">,</span> <span class="s1">&#39;I&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Custom NLA descriptions should be defined in the same class,
+where they are used.</p>
+<p>Also, it is possible to use not autogenerated type numbers, as
+for ifaddrmsg, but specify them explicitly:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">iw_event</span><span class="p">(</span><span class="n">nla</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="n">nla_map</span> <span class="o">=</span> <span class="p">((</span><span class="mh">0x8B00</span><span class="p">,</span> <span class="s1">&#39;SIOCSIWCOMMIT&#39;</span><span class="p">,</span> <span class="s1">&#39;hex&#39;</span><span class="p">),</span>
+               <span class="p">(</span><span class="mh">0x8B01</span><span class="p">,</span> <span class="s1">&#39;SIOCGIWNAME&#39;</span><span class="p">,</span> <span class="s1">&#39;hex&#39;</span><span class="p">),</span>
+               <span class="p">(</span><span class="mh">0x8B02</span><span class="p">,</span> <span class="s1">&#39;SIOCSIWNWID&#39;</span><span class="p">,</span> <span class="s1">&#39;hex&#39;</span><span class="p">),</span>
+               <span class="p">(</span><span class="mh">0x8B03</span><span class="p">,</span> <span class="s1">&#39;SIOCGIWNWID&#39;</span><span class="p">,</span> <span class="s1">&#39;hex&#39;</span><span class="p">),</span>
+               <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here you can see custom NLA type numbers &#8211; 0x8B00, 0x8B01 etc.
+It is not permitted to mix these two forms in one class: you should
+use ether autogenerated type numbers (two fields tuples), or
+explicit numbers (three fields typles).</p>
+</div>
+<div class="section" id="array-types">
+<h3>array types<a class="headerlink" href="#array-types" title="Permalink to this headline">¶</a></h3>
+<p>There are different array-like NLA types in the kernel, and
+some of them are covered by pyroute2. An array of simple type
+elements:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># declaration</span>
+<span class="n">nla_map</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;NLA_TYPE&#39;</span><span class="p">,</span> <span class="s1">&#39;array(uint8)&#39;</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+
+<span class="c1"># data layout</span>
+<span class="o">+======+======+----------------------------</span>
+<span class="o">|</span> <span class="nb">len</span>  <span class="o">|</span> <span class="nb">type</span> <span class="o">|</span> <span class="n">uint8</span> <span class="o">|</span> <span class="n">uint8</span> <span class="o">|</span> <span class="n">uint</span> <span class="mi">8</span> <span class="o">|</span> <span class="o">...</span>
+<span class="o">+======+======+----------------------------</span>
+
+<span class="c1"># decoded</span>
+<span class="p">{</span><span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;NLA_TYPE&#39;</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="o">...</span><span class="p">)],</span> <span class="o">...</span><span class="p">],</span> <span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>An array of NLAs:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># declaration</span>
+<span class="n">nla_map</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;NLA_TYPE&#39;</span><span class="p">,</span> <span class="s1">&#39;*type&#39;</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+
+<span class="c1"># data layout</span>
+<span class="o">+=======+=======+-----------------------+-----------------------+--</span>
+<span class="o">|</span> <span class="nb">len</span>   <span class="o">|</span> <span class="nb">type</span><span class="o">*</span> <span class="o">|</span> <span class="nb">len</span>  <span class="o">|</span> <span class="nb">type</span> <span class="o">|</span> <span class="n">payload</span> <span class="o">|</span> <span class="nb">len</span>  <span class="o">|</span> <span class="nb">type</span> <span class="o">|</span> <span class="n">payload</span> <span class="o">|</span> <span class="o">...</span>
+<span class="o">+=======+=======+-----------------------+-----------------------+--</span>
+<span class="c1"># type* -- in that case the type is OR&#39;ed with NLA_F_NESTED</span>
+
+<span class="c1"># decoded</span>
+<span class="p">{</span><span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;NLA_TYPE&#39;</span><span class="p">,</span> <span class="p">[</span><span class="n">payload</span><span class="p">,</span> <span class="n">payload</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="o">...</span><span class="p">],</span> <span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="parsed-netlink-message">
+<h3>parsed netlink message<a class="headerlink" href="#parsed-netlink-message" title="Permalink to this headline">¶</a></h3>
+<p>Netlink messages are represented by pyroute2 as dictionaries
+as follows:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;header&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;pid&#39;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+            <span class="s1">&#39;length: ...,</span>
+            <span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+            <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># if you are lucky</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+            <span class="s1">&#39;sequence_number&#39;</span><span class="p">:</span> <span class="o">...</span><span class="p">},</span>
+
+ <span class="c1"># fields attributes</span>
+ <span class="s1">&#39;field_name1&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+ <span class="o">...</span>
+ <span class="s1">&#39;field_nameX&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+
+ <span class="c1"># nla tree</span>
+ <span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;NLA_NAME1&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">],</span>
+           <span class="o">...</span>
+           <span class="p">[</span><span class="s1">&#39;NLA_NAMEX&#39;</span><span class="p">,</span> <span class="n">value</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NLA_NAMEY&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s1">&#39;field_name1&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+                          <span class="o">...</span>
+                          <span class="s1">&#39;field_nameX&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+                          <span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;NLA_NAME.... ]]}]]}</span>
+</pre></div>
+</div>
+<p>As an example, a message from the wireless subsystem about new
+scan event:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;index&#39;</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+ <span class="s1">&#39;family&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;__align&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;header&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;pid&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s1">&#39;length&#39;</span><span class="p">:</span> <span class="mi">64</span><span class="p">,</span>
+            <span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="mi">16</span><span class="p">,</span>
+            <span class="s1">&#39;sequence_number&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+ <span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">69699</span><span class="p">,</span>
+ <span class="s1">&#39;ifi_type&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+ <span class="s1">&#39;event&#39;</span><span class="p">:</span> <span class="s1">&#39;RTM_NEWLINK&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;change&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;IFLA_IFNAME&#39;</span><span class="p">,</span> <span class="s1">&#39;wlp3s0&#39;</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;IFLA_WIRELESS&#39;</span><span class="p">,</span>
+            <span class="p">{</span><span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;SIOCGIWSCAN&#39;</span><span class="p">,</span>
+                        <span class="s1">&#39;00:00:00:00:00:00:00:00:00:00:00:00&#39;</span><span class="p">]]}]]}</span>
+</pre></div>
+</div>
+<p>One important detail is that NLA chain is represented as a list of
+elements <cite>[&#8216;NLA_TYPE&#8217;, value]</cite>, not as a dictionary. The reason is that
+though in the kernel <em>usually</em> NLA chain is a dictionary, the netlink
+protocol by itself doesn&#8217;t require elements of each type to be unique.
+In a message there may be several NLA of the same type.</p>
+</div>
+<div class="section" id="encoding-and-decoding-algo">
+<h3>encoding and decoding algo<a class="headerlink" href="#encoding-and-decoding-algo" title="Permalink to this headline">¶</a></h3>
+<p>The message encoding works as follows:</p>
+<ol class="arabic simple">
+<li>Reserve space for the message header (if there is)</li>
+<li>Iterate defined <cite>fields</cite>, encoding values with <cite>struct.pack()</cite></li>
+<li>Iterate NLA from the <cite>attrs</cite> field, looking up types in <cite>nla_map</cite></li>
+<li>Encode the header</li>
+</ol>
+<p>Since every NLA is also an <cite>nlmsg</cite> object, there is a recursion.</p>
+<p>The decoding process is a bit simpler:</p>
+<ol class="arabic simple">
+<li>Decode the header</li>
+<li>Iterate <cite>fields</cite>, decoding values with <cite>struct.unpack()</cite></li>
+<li>Iterate NLA until the message ends</li>
+</ol>
+<p>If the <cite>fields</cite> attribute is an empty list, the step 2 will be skipped.
+The step 3 will be skipped in the case of the empty <cite>nla_map</cite>. If both
+attributes are empty lists, only the header will be encoded/decoded.</p>
+</div>
+<div class="section" id="create-and-send-messages">
+<h3>create and send messages<a class="headerlink" href="#create-and-send-messages" title="Permalink to this headline">¶</a></h3>
+<p>Using high-level interfaces like <cite>IPRoute</cite> or <cite>IPDB</cite>, you will never
+need to manually construct and send netlink messages. But in the case
+you really need it, it is simple as well.</p>
+<p>Having a description class, like <cite>ifaddrmsg</cite> from above, you need to:</p>
+<blockquote>
+<div><ul class="simple">
+<li>instantiate it</li>
+<li>fill the fields</li>
+<li>encode the packet</li>
+<li>send the encoded data</li>
+</ul>
+</div></blockquote>
+<p>The code:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2.netlink</span> <span class="k">import</span> <span class="n">NLM_F_REQUEST</span>
+<span class="kn">from</span> <span class="nn">pyroute2.netlink</span> <span class="k">import</span> <span class="n">NLM_F_ACK</span>
+<span class="kn">from</span> <span class="nn">pyroute2.netlink</span> <span class="k">import</span> <span class="n">NLM_F_CREATE</span>
+<span class="kn">from</span> <span class="nn">pyroute2.netlink</span> <span class="k">import</span> <span class="n">NLM_F_EXCL</span>
+<span class="kn">from</span> <span class="nn">pyroute2.iproute</span> <span class="k">import</span> <span class="n">RTM_NEWADDR</span>
+<span class="kn">from</span> <span class="nn">pyroute2.netlink.rtnl.ifaddrmsg</span> <span class="k">import</span> <span class="n">ifaddrmsg</span>
+
+<span class="c1">##</span>
+<span class="c1"># add an addr to an interface</span>
+<span class="c1">#</span>
+
+<span class="c1"># create the message</span>
+<span class="n">msg</span> <span class="o">=</span> <span class="n">ifaddrmsg</span><span class="p">()</span>
+
+<span class="c1"># fill the protocol-specific fields</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;index&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">index</span>  <span class="c1"># index of the interface</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;family&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">AF_INET</span>  <span class="c1"># address family</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;prefixlen&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">24</span>  <span class="c1"># the address mask</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;scope&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">scope</span>  <span class="c1"># see /etc/iproute2/rt_scopes</span>
+
+<span class="c1"># attach NLA -- it MUST be a list / mutable</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;attrs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[[</span><span class="s1">&#39;IFA_LOCAL&#39;</span><span class="p">,</span> <span class="s1">&#39;192.168.0.1&#39;</span><span class="p">],</span>
+                <span class="p">[</span><span class="s1">&#39;IFA_ADDRESS&#39;</span><span class="p">,</span> <span class="s1">&#39;192.162.0.1&#39;</span><span class="p">]]</span>
+
+<span class="c1"># fill generic netlink fields</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;header&#39;</span><span class="p">][</span><span class="s1">&#39;sequence_number&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nonce</span>  <span class="c1"># an unique seq number</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;header&#39;</span><span class="p">][</span><span class="s1">&#39;pid&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">()</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;header&#39;</span><span class="p">][</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">RTM_NEWADDR</span>
+<span class="n">msg</span><span class="p">[</span><span class="s1">&#39;header&#39;</span><span class="p">][</span><span class="s1">&#39;flags&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">NLM_F_REQUEST</span> <span class="o">|</span>\
+                         <span class="n">NLM_F_ACK</span> <span class="o">|</span>\
+                         <span class="n">NLM_F_CREATE</span> <span class="o">|</span>\
+                         <span class="n">NLM_F_EXCL</span>
+
+<span class="c1"># encode the packet</span>
+<span class="n">msg</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+
+<span class="c1"># send the buffer</span>
+<span class="n">nlsock</span><span class="o">.</span><span class="n">sendto</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Please notice, that NLA list <em>MUST</em> be mutable.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Netlink</a><ul>
+<li><a class="reference internal" href="#basics">basics</a></li>
+<li><a class="reference internal" href="#pyroute2-and-netlink">pyroute2 and netlink</a><ul>
+<li><a class="reference internal" href="#packets">packets</a></li>
+<li><a class="reference internal" href="#fields-attribute">fields attribute</a></li>
+<li><a class="reference internal" href="#nla-map-attribute">nla_map attribute</a></li>
+<li><a class="reference internal" href="#array-types">array types</a></li>
+<li><a class="reference internal" href="#parsed-netlink-message">parsed netlink message</a></li>
+<li><a class="reference internal" href="#encoding-and-decoding-algo">encoding and decoding algo</a></li>
+<li><a class="reference internal" href="#create-and-send-messages">create and send messages</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="arch.html"
+                        title="previous chapter">Module architecture</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="nlsocket.html"
+                        title="next chapter">Base netlink socket and marshal</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/netlink.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="nlsocket.html" title="Base netlink socket and marshal"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="arch.html" title="Module architecture"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

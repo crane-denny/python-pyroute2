@@ -1,0 +1,256 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>DHCP support &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="dhcp-support">
+<h1>DHCP support<a class="headerlink" href="#dhcp-support" title="Permalink to this headline">¶</a></h1>
+<p>DHCP support in <cite>pyroute2</cite> is in very initial state, so it is
+in the «Development section» yet. DHCP protocol has nothing
+to do with netlink, but <cite>pyroute2</cite> slowly moving from
+netlink-only library to some more general networking
+framework.</p>
+<span class="target" id="module-pyroute2.dhcp"></span><div class="section" id="dhcp-protocol">
+<h2>DHCP protocol<a class="headerlink" href="#dhcp-protocol" title="Permalink to this headline">¶</a></h2>
+<p>The DHCP implementation here is far from complete, but
+already provides some basic functionality. Later it will
+be extended with IPv6 support and more DHCP options
+will be added.</p>
+<p>Right now it can be interesting mostly to developers,
+but not users and/or system administrators. So, the
+development hints first.</p>
+<p>The packet structure description is intentionally
+implemented as for netlink packets. Later these two
+parsers, netlink and generic, can be merged, so the
+syntax is more or less compatible.</p>
+<div class="section" id="packet-fields">
+<h3>Packet fields<a class="headerlink" href="#packet-fields" title="Permalink to this headline">¶</a></h3>
+<p>There are two big groups of items within any DHCP packet.
+First, there are BOOTP/DHCP packet fields, they&#8217;re defined
+with the <cite>fields</cite> attribute:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">dhcp4msg</span><span class="p">(</span><span class="n">msg</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">((</span><span class="n">name</span><span class="p">,</span> <span class="nb">format</span><span class="p">,</span> <span class="n">policy</span><span class="p">),</span>
+              <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">format</span><span class="p">,</span> <span class="n">policy</span><span class="p">),</span>
+              <span class="o">...</span>
+              <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">format</span><span class="p">,</span> <span class="n">policy</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The <cite>name</cite> can be any literal. Format should be specified
+as for the struct module, like <cite>B</cite> for <cite>uint8</cite>, or <cite>i</cite> for
+<cite>int32</cite>, or <cite>&gt;Q</cite> for big-endian uint64. There are also
+aliases defined, so one can write <cite>uint8</cite> or <cite>be16</cite>, or
+like that. Possible aliases can be seen in the
+<cite>pyroute2.protocols</cite> module.</p>
+<p>The <cite>policy</cite> is a bit complicated. It can be a number or
+literal, and it will mean that it is a default value, that
+should be encoded if no other value is given.</p>
+<p>But when the <cite>policy</cite> is a dictionary, it can contain keys
+as follows:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="s1">&#39;l2addr&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;format&#39;</span><span class="p">:</span> <span class="s1">&#39;6B&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;decode&#39;</span><span class="p">:</span> <span class="o">...</span><span class="p">,</span>
+           <span class="s1">&#39;encode&#39;</span><span class="p">:</span> <span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Keys <cite>encode</cite> and <cite>decode</cite> should contain filters to be used
+in decoding and encoding procedures. The encoding filter
+should accept the value from user&#8217;s definition and should
+return a value that can be packed using <cite>format</cite>. The decoding
+filter should accept a value, decoded according to <cite>format</cite>,
+and should return value that can be used by a user.</p>
+<p>The <cite>struct</cite> module can not decode IP addresses etc, so they
+should be decoded as <cite>4s</cite>, e.g. Further transformation from
+4 bytes string to a string like &#8216;10.0.0.1&#8217; performs the filter.</p>
+</div>
+<div class="section" id="dhcp-options">
+<h3>DHCP options<a class="headerlink" href="#dhcp-options" title="Permalink to this headline">¶</a></h3>
+<p>DHCP options are described in a similar way:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">options</span> <span class="o">=</span> <span class="p">((</span><span class="n">code</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">format</span><span class="p">),</span>
+           <span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">format</span><span class="p">),</span>
+           <span class="o">...</span>
+           <span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="nb">format</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Code is a <cite>uint8</cite> value, name can be any string literal. Format
+is a string, that must have a corresponding class, inherited from
+<cite>pyroute2.dhcp.option</cite>. One can find these classes in
+<cite>pyroute2.dhcp</cite> (more generic) or in <cite>pyroute2.dhcp.dhcp4msg</cite>
+(IPv4-specific). The option class must reside within dhcp message
+class.</p>
+<p>Every option class can be decoded in two ways. If it has fixed
+width fields, it can be decoded with ordinary <cite>msg</cite> routines, and
+in this case it can look like that:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">client_id</span><span class="p">(</span><span class="n">option</span><span class="p">):</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">((</span><span class="s1">&#39;type&#39;</span><span class="p">,</span> <span class="s1">&#39;uint8&#39;</span><span class="p">),</span>
+              <span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">,</span> <span class="s1">&#39;l2addr&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>If it must be decoded by some custom rules, one can define the
+policy just like for the fields above:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">array8</span><span class="p">(</span><span class="n">option</span><span class="p">):</span>
+    <span class="n">policy</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;format&#39;</span><span class="p">:</span> <span class="s1">&#39;string&#39;</span><span class="p">,</span>
+              <span class="s1">&#39;encode&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">array</span><span class="p">(</span><span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">(),</span>
+              <span class="s1">&#39;decode&#39;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">array</span><span class="p">(</span><span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()}</span>
+</pre></div>
+</div>
+<p>In the corresponding modules, like in <cite>pyroute2.dhcp.dhcp4msg</cite>,
+one can define as many custom DHCP options, as one need. Just
+be sure, that they are compatible with the DHCP server and all
+fit into 1..254 (<cite>uint8</cite>) &#8211; the 0 code is used for padding and
+the code 255 is the end of options code.</p>
+</div>
+</div>
+<span class="target" id="module-pyroute2.dhcp.dhcp4socket"></span><div class="section" id="ipv4-dhcp-socket">
+<h2>IPv4 DHCP socket<a class="headerlink" href="#ipv4-dhcp-socket" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="pyroute2.dhcp.dhcp4socket.DHCP4Socket">
+<em class="property">class </em><code class="descclassname">pyroute2.dhcp.dhcp4socket.</code><code class="descname">DHCP4Socket</code><span class="sig-paren">(</span><em>ifname</em>, <em>port=68</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.dhcp.dhcp4socket.DHCP4Socket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parameters:</p>
+<ul class="simple">
+<li>ifname &#8211; interface name to work on</li>
+</ul>
+<p>This raw socket binds to an interface and installs BPF filter
+to get only its UDP port. It can be used in poll/select and
+provides also the context manager protocol, so can be used in
+<cite>with</cite> statements.</p>
+<p>It does not provide any DHCP state machine, and does not inspect
+DHCP packets, it is totally up to you. No default values are
+provided here, except <cite>xid</cite> &#8211; DHCP transaction ID. If <cite>xid</cite> is
+not provided, DHCP4Socket generates it for outgoing messages.</p>
+<dl class="method">
+<dt id="pyroute2.dhcp.dhcp4socket.DHCP4Socket.get">
+<code class="descname">get</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.dhcp.dhcp4socket.DHCP4Socket.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the next incoming packet from the socket and try
+to decode it as IPv4 DHCP. No analysis is done here,
+only MAC/IPv4/UDP headers are stripped out, and the
+rest is interpreted as DHCP.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.dhcp.dhcp4socket.DHCP4Socket.put">
+<code class="descname">put</code><span class="sig-paren">(</span><em>msg=None</em>, <em>dport=67</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.dhcp.dhcp4socket.DHCP4Socket.put" title="Permalink to this definition">¶</a></dt>
+<dd><p>Put DHCP message. Parameters:</p>
+<ul class="simple">
+<li>msg &#8211; dhcp4msg instance</li>
+<li>dport &#8211; DHCP server port</li>
+</ul>
+<p>If <cite>msg</cite> is not provided, it is constructed as default
+BOOTREQUEST + DHCPDISCOVER.</p>
+<p>Examples:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">sock</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">dhcp4msg</span><span class="p">({</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="n">BOOTREQUEST</span><span class="p">,</span>
+                   <span class="s1">&#39;chaddr&#39;</span><span class="p">:</span> <span class="s1">&#39;ff:11:22:33:44:55&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;options&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;message_type&#39;</span><span class="p">:</span> <span class="n">DHCPREQUEST</span><span class="p">,</span>
+                               <span class="s1">&#39;parameter_list&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">15</span><span class="p">],</span>
+                               <span class="s1">&#39;requested_ip&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.101.2&#39;</span><span class="p">,</span>
+                               <span class="s1">&#39;server_id&#39;</span><span class="p">:</span> <span class="s1">&#39;172.16.101.1&#39;</span><span class="p">}}))</span>
+</pre></div>
+</div>
+<p>The method returns dhcp4msg that was sent, so one can get from
+there <cite>xid</cite> (transaction id) and other details.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">DHCP support</a><ul>
+<li><a class="reference internal" href="#dhcp-protocol">DHCP protocol</a><ul>
+<li><a class="reference internal" href="#packet-fields">Packet fields</a></li>
+<li><a class="reference internal" href="#dhcp-options">DHCP options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#ipv4-dhcp-socket">IPv4 DHCP socket</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/dhcp.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

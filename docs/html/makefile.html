@@ -1,0 +1,235 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>makefile documentation &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
+    <link rel="next" title="report a bug" href="report.html" />
+    <link rel="prev" title="changelog" href="changelog.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="report.html" title="report a bug"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="changelog.html" title="changelog"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="makefile-documentation">
+<h1>makefile documentation<a class="headerlink" href="#makefile-documentation" title="Permalink to this headline">¶</a></h1>
+<p>Makefile is used to automate Pyroute2 deployment and test
+processes. Mostly, it is but a collection of common commands.</p>
+<div class="section" id="target-clean">
+<h2>target: clean<a class="headerlink" href="#target-clean" title="Permalink to this headline">¶</a></h2>
+<p>Clean up the repo directory from the built documentation,
+collected coverage data, compiled bytecode etc.</p>
+</div>
+<div class="section" id="target-docs">
+<h2>target: docs<a class="headerlink" href="#target-docs" title="Permalink to this headline">¶</a></h2>
+<p>Build documentation. Requires <cite>sphinx</cite>.</p>
+</div>
+<div class="section" id="target-epydoc">
+<h2>target: epydoc<a class="headerlink" href="#target-epydoc" title="Permalink to this headline">¶</a></h2>
+<p>Build API documentation. Requires <cite>epydoc</cite>.</p>
+<p>Pls notice that epydoc is discontinued. The reason to support
+it here is that it performs additional API testing and helps
+to highlight API inconsistencies.</p>
+<p>No issues regarding epydoc output format are accepted.</p>
+</div>
+<div class="section" id="target-test">
+<h2>target: test<a class="headerlink" href="#target-test" title="Permalink to this headline">¶</a></h2>
+<p>Run tests against current code. Command line options:</p>
+<ul class="simple">
+<li>python &#8211; path to the Python to use</li>
+<li>nosetests &#8211; path to nosetests to use</li>
+<li>wlevel &#8211; the Python -W level</li>
+<li>coverage &#8211; set <cite>coverage=html</cite> to get coverage report</li>
+<li>pdb &#8211; set <cite>pdb=true</cite> to launch pdb on errors</li>
+<li>module &#8211; run only specific test module</li>
+<li>skip &#8211; skip tests by pattern</li>
+</ul>
+<p>To run the full test cycle on the project, using a specific
+python, making html coverage report:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ sudo make test python=python3 coverage=html
+</pre></div>
+</div>
+<p>To run a specific test module:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ sudo make test module=general:test_ipdb.py:TestExplicit
+</pre></div>
+</div>
+<p>The module parameter syntax:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>## module=package[:test_file.py[:TestClass[.test_case]]]
+
+$ sudo make test module=lnst
+$ sudo make test module=general:test_ipr.py
+$ sudo make test module=general:test_ipdb.py:TestExplicit
+</pre></div>
+</div>
+<p>There are several test packages:</p>
+<ul class="simple">
+<li>general &#8211; common functional tests</li>
+<li>eventlet &#8211; Neutron compatibility tests</li>
+<li>lnst &#8211; LNST compatibility tests</li>
+</ul>
+<p>For each package a new Python instance is launched, keep that
+in mind since it affects the code coverage collection.</p>
+<p>It is possible to skip tests by a pattern:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ sudo make test skip=test_stress
+</pre></div>
+</div>
+</div>
+<div class="section" id="target-test-ci">
+<h2>target: test-ci<a class="headerlink" href="#target-test-ci" title="Permalink to this headline">¶</a></h2>
+<p>Run tests on isolated VMs defined by <cite>tests/ci/configs/*xml</cite>.</p>
+<p>Requires qemu, kvm, libvirt and civm script: <a class="reference external" href="https://github.com/svinota/civm">https://github.com/svinota/civm</a></p>
+<p>Command line options:</p>
+<ul class="simple">
+<li>civm &#8211; path to the civm script (if it is not in <cite>$PATH</cite>)</li>
+</ul>
+</div>
+<div class="section" id="target-dist">
+<h2>target: dist<a class="headerlink" href="#target-dist" title="Permalink to this headline">¶</a></h2>
+<p>Make Python distribution package. Command line options:</p>
+<ul class="simple">
+<li>python &#8211; the Python to use</li>
+</ul>
+</div>
+<div class="section" id="target-install">
+<h2>target: install<a class="headerlink" href="#target-install" title="Permalink to this headline">¶</a></h2>
+<p>Build and install the package into the system. Command line options:</p>
+<ul class="simple">
+<li>python &#8211; the Python to use</li>
+<li>root &#8211; root install directory</li>
+<li>lib &#8211; where to install lib files</li>
+</ul>
+</div>
+<div class="section" id="target-develop">
+<h2>target: develop<a class="headerlink" href="#target-develop" title="Permalink to this headline">¶</a></h2>
+<p>Build the package and deploy the egg-link with setuptools. No code
+will be deployed into the system directories, but instead the local
+package directory will be visible to the python. In that case one
+can change the code locally and immediately test it system-wide
+without running <cite>make install</cite>.</p>
+<ul class="simple">
+<li>python &#8211; the Python to use</li>
+</ul>
+</div>
+<div class="section" id="other-targets">
+<h2>other targets<a class="headerlink" href="#other-targets" title="Permalink to this headline">¶</a></h2>
+<p>Other targets are either utility targets to be used internally,
+or hooks for related projects. You can safely ignore them.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">makefile documentation</a><ul>
+<li><a class="reference internal" href="#target-clean">target: clean</a></li>
+<li><a class="reference internal" href="#target-docs">target: docs</a></li>
+<li><a class="reference internal" href="#target-epydoc">target: epydoc</a></li>
+<li><a class="reference internal" href="#target-test">target: test</a></li>
+<li><a class="reference internal" href="#target-test-ci">target: test-ci</a></li>
+<li><a class="reference internal" href="#target-dist">target: dist</a></li>
+<li><a class="reference internal" href="#target-install">target: install</a></li>
+<li><a class="reference internal" href="#target-develop">target: develop</a></li>
+<li><a class="reference internal" href="#other-targets">other targets</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="changelog.html"
+                        title="previous chapter">changelog</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="report.html"
+                        title="next chapter">report a bug</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/makefile.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="report.html" title="report a bug"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="changelog.html" title="changelog"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

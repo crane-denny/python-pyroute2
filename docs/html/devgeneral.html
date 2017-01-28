@@ -1,0 +1,247 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Modules layout &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <p>It is easy to start to develop with pyroute2. In the simplest
+case one just uses the library as is, and please do not
+forget to file issues, bugs and feature requests to the
+project github page.</p>
+<p>If something should be changed in the library itself, and
+you think you can do it, this document should help a bit.</p>
+<div class="section" id="modules-layout">
+<h1>Modules layout<a class="headerlink" href="#modules-layout" title="Permalink to this headline">¶</a></h1>
+<p>The library consists of several significant parts, and every
+part has its own functionality:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>NetlinkSocket: connects the library to the OS
+  ↑       ↑
+  |       |
+  |       ↓
+  |     Marshal ←—→ Message classes
+  |
+  |
+  ↓
+NL utility classes: more or less user-friendly API
+</pre></div>
+</div>
+<p>NetlinkSocket and Marshal: <a class="reference internal" href="nlsocket.html"><span class="doc">Base netlink socket and marshal</span></a></p>
+<div class="section" id="netlinksocket">
+<h2>NetlinkSocket<a class="headerlink" href="#netlinksocket" title="Permalink to this headline">¶</a></h2>
+<p>Notice, that it is possible to use a custom base class
+instead of <cite>socket.socket</cite>. Thus, one can transparently
+port this library to any different transport, or to use it
+with <cite>eventlet</cite> library, that is not happy with
+<cite>socket.socket</cite> objects, and so on.</p>
+</div>
+<div class="section" id="marshal">
+<h2>Marshal<a class="headerlink" href="#marshal" title="Permalink to this headline">¶</a></h2>
+<p>A custom marshalling class can be required, if the protocol
+uses some different marshalling algo from usual netlink.
+Otherwise it is enough to use <cite>register_policy</cite> method of
+the <cite>NetlinkSocket</cite>:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># somewhere in a custom netlink class</span>
+
+<span class="c1"># dict key: message id, int</span>
+<span class="c1"># dict value: message class</span>
+<span class="n">policy</span> <span class="o">=</span> <span class="p">{</span><span class="n">IPSET_CMD_PROTOCOL</span><span class="p">:</span> <span class="n">ipset_msg</span><span class="p">,</span>
+          <span class="n">IPSET_CMD_LIST</span><span class="p">:</span> <span class="n">ipset_msg</span><span class="p">}</span>
+
+<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">register_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>But if just matching is not enough, refer to the <cite>Marshal</cite>
+implementation. It is possible, e.g., to define the custom
+<cite>fix_message</cite> method to be run on every message, etc. A
+sample of such custom marshal can be found in the RTNL
+implementation: <cite>pyroute2.netlink.rtnl</cite>.</p>
+</div>
+<div class="section" id="messages">
+<h2>Messages<a class="headerlink" href="#messages" title="Permalink to this headline">¶</a></h2>
+<p>All the message classes hierarchy is built on the simple
+fact that the netlink message structure is recursive in that
+or other way.</p>
+<p>A usual way to implement messages is described in the
+netlink docs: <a class="reference internal" href="netlink.html"><span class="doc">Netlink</span></a>.</p>
+<p>The core module, <cite>pyroute2.netlink</cite>, provides base classes
+<cite>nlmsg</cite> and <cite>nla</cite>, as well as some other (<cite>genlmsg</cite>), and
+basic NLA types: <cite>uint32</cite>, <cite>be32</cite>, <cite>ip4addr</cite>, <cite>l2addr</cite> etc.</p>
+<p>One of the NLA types, <cite>hex</cite>, can be used to dump the NLA
+structure in the hex format &#8211; it is useful for development.</p>
+</div>
+<div class="section" id="nl-utility-classes">
+<h2>NL utility classes<a class="headerlink" href="#nl-utility-classes" title="Permalink to this headline">¶</a></h2>
+<p>They are based on different netlink sockets, such as
+<cite>IPRsocket</cite> (RTNL), <cite>NL80211</cite> (wireless), or just
+<cite>NetlinkSocket</cite> &#8211; be it generic netlink or nfnetlink
+(see taskstats and ipset).</p>
+<p>Primarily, <cite>pyroute2</cite> is a netlink framework, so basic
+classes and low-level utilities are intended to return
+parsed netlink messages, not some user-friendly output.
+So be not surprised.</p>
+<p>But user-friendly modules are also possible and partly
+provided, such as <cite>IPDB</cite>.</p>
+<p>A list of low-level utility classes:</p>
+<ul class="simple">
+<li><cite>IPRoute</cite> [<cite>pyroute2.iproute</cite>], RTNL utility like ip/tc</li>
+<li><cite>IPSet</cite> [<cite>pyroute2.ipset</cite>], manipulate IP sets</li>
+<li><cite>IW</cite> [<cite>pyroute2.iwutil</cite>], basic nl80211 support</li>
+<li><cite>NetNS</cite> [<cite>pyroute2.netns</cite>], netns-enabled <cite>IPRoute</cite></li>
+<li><cite>TaskStats</cite> [<cite>pyroute2.netlink.taskstats</cite>], taskstats utility</li>
+</ul>
+<p>High-level utilities:</p>
+<ul class="simple">
+<li><cite>IPDB</cite> [<cite>pyroute2.ipdb</cite>], async IP database</li>
+</ul>
+</div>
+<div class="section" id="deferred-imports">
+<h2>Deferred imports<a class="headerlink" href="#deferred-imports" title="Permalink to this headline">¶</a></h2>
+<p>The file <cite>pyroute2/__init__.py</cite> is a proxy for some modules,
+thus providing a fixed import address, like:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+<span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="o">...</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>But not only. Actually, <cite>pyroute2/__init__.py</cite> exports not
+classes and modules, but proxy objects, that load the actual
+code in the runtime. The rationale is simple: in that way we
+provide a possibility to use a custom base classes, see
+<cite>examples/custom_socket_base.py</cite>.</p>
+</div>
+<div class="section" id="protocol-debugging">
+<h2>Protocol debugging<a class="headerlink" href="#protocol-debugging" title="Permalink to this headline">¶</a></h2>
+<p>The simplest way to start with some netlink protocol is to
+use a reference implementation. Lets say we wrote the
+<cite>ipset_msg</cite> class using the kernel code, and want to check
+how it works. So the ipset(8) utility will be used as a
+reference implementation:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ sudo strace -e trace=network -f -x -s 4096 ipset list
+socket(PF_NETLINK, SOCK_RAW, NETLINK_NETFILTER) = 3
+bind(3, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 0
+getsockname(3, {sa_family=AF_NETLINK, pid=7009, groups=00000000}, [12]) = 0
+sendto(3, &quot;\x1c\x00\x00\x00\x01\x06\x01\x00\xe3\x95\...
+recvmsg(3, {msg_name(12)={sa_family=AF_NETLINK, pid=0, groups=00000000},
+    msg_iov(1)=[{&quot;\x1c\x00\x00\x00\x01\x06\x00\x00\xe3\...
+sendto(3, &quot;\x1c\x00\x00\x00\x07\x06\x05\x03\xe4\x95\...
+recvmsg(3, {msg_name(12)={sa_family=AF_NETLINK, pid=0, groups=00000000},
+    msg_iov(1)=[{&quot;\x78\x00\x00\x00\x07\x06\x02\x00\xe4\...
+</pre></div>
+</div>
+<p>Here you can just copy packet strings from <cite>sendto</cite> and
+<cite>recvmsg</cite>, place in a file and use <cite>scripts/decoder.py</cite> to
+inspect them:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ export PYTHONPATH=`pwd`
+$ python scripts/decoder.py \
+    pyroute2.netlink.nfnetlink.ipset.ipset_msg \
+    scripts/ipset_01.data
+</pre></div>
+</div>
+<p>See collected samples in the <cite>scripts</cite> directory. The script
+ignores spaces and allows multiple messages in the same file.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Modules layout</a><ul>
+<li><a class="reference internal" href="#netlinksocket">NetlinkSocket</a></li>
+<li><a class="reference internal" href="#marshal">Marshal</a></li>
+<li><a class="reference internal" href="#messages">Messages</a></li>
+<li><a class="reference internal" href="#nl-utility-classes">NL utility classes</a></li>
+<li><a class="reference internal" href="#deferred-imports">Deferred imports</a></li>
+<li><a class="reference internal" href="#protocol-debugging">Protocol debugging</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/devgeneral.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

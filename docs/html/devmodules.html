@@ -1,0 +1,340 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Modules in progress &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="modules-in-progress">
+<h1>Modules in progress<a class="headerlink" href="#modules-in-progress" title="Permalink to this headline">¶</a></h1>
+<p>There are several modules in the very initial development
+state, and the help with them will be particularly
+valuable. You are more than just welcome to help with:</p>
+<span class="target" id="module-pyroute2.ipset"></span><div class="section" id="ipset-module">
+<h2>IPSet module<a class="headerlink" href="#ipset-module" title="Permalink to this headline">¶</a></h2>
+<p>The very basic ipset support.</p>
+<p>Right now it is tested only for hash:ip and doesn&#8217;t support
+many useful options. But it can be easily extended, so you
+are welcome to help with that.</p>
+<dl class="class">
+<dt id="pyroute2.ipset.IPSet">
+<em class="property">class </em><code class="descclassname">pyroute2.ipset.</code><code class="descname">IPSet</code><span class="sig-paren">(</span><em>version=6</em>, <em>attr_revision=None</em>, <em>nfgen_family=2</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet" title="Permalink to this definition">¶</a></dt>
+<dd><p>NFNetlink socket (family=NETLINK_NETFILTER).</p>
+<p>Implements API to the ipset functionality.</p>
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.add">
+<code class="descname">add</code><span class="sig-paren">(</span><em>name</em>, <em>entry</em>, <em>family=2</em>, <em>exclusive=True</em>, <em>comment=None</em>, <em>timeout=None</em>, <em>etype='ip'</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.add" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a member to the ipset</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.create">
+<code class="descname">create</code><span class="sig-paren">(</span><em>name</em>, <em>stype='hash:ip'</em>, <em>family=2</em>, <em>exclusive=True</em>, <em>counters=False</em>, <em>comment=False</em>, <em>maxelem=65536</em>, <em>forceadd=False</em>, <em>hashsize=None</em>, <em>timeout=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.create" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an ipset <cite>name</cite> of type <cite>stype</cite>, by default
+<cite>hash:ip</cite>.</p>
+<p>Very simple and stupid method, should be extended
+to support more ipset options.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.delete">
+<code class="descname">delete</code><span class="sig-paren">(</span><em>name</em>, <em>entry</em>, <em>family=2</em>, <em>exclusive=True</em>, <em>etype='ip'</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete a member from the ipset</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.destroy">
+<code class="descname">destroy</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.destroy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Destroy an ipset</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.flush">
+<code class="descname">flush</code><span class="sig-paren">(</span><em>name=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.flush" title="Permalink to this definition">¶</a></dt>
+<dd><p>Flush all ipsets. When name is set, flush only this ipset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.get_supported_revisions">
+<code class="descname">get_supported_revisions</code><span class="sig-paren">(</span><em>stype</em>, <em>family=2</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.get_supported_revisions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return minimum and maximum of revisions supported by the kernel</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.headers">
+<code class="descname">headers</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.headers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get headers of the named ipset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.list">
+<code class="descname">list</code><span class="sig-paren">(</span><em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.list" title="Permalink to this definition">¶</a></dt>
+<dd><p>List installed ipsets. If <cite>name</cite> is provided, list
+the named ipset or return an empty list.</p>
+<p>It looks like nfnetlink doesn&#8217;t return an error,
+when requested ipset doesn&#8217;t exist.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.rename">
+<code class="descname">rename</code><span class="sig-paren">(</span><em>name_src</em>, <em>name_dst</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.rename" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rename the ipset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.swap">
+<code class="descname">swap</code><span class="sig-paren">(</span><em>set_a</em>, <em>set_b</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.swap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Swap two ipsets</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.test">
+<code class="descname">test</code><span class="sig-paren">(</span><em>name</em>, <em>entry</em>, <em>family=2</em>, <em>etype='ip'</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test if a member is part of an ipset</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<span class="target" id="module-pyroute2.iwutil"></span><div class="section" id="iw-module">
+<h2>IW module<a class="headerlink" href="#iw-module" title="Permalink to this headline">¶</a></h2>
+<p>Experimental wireless module — nl80211 support.</p>
+<div class="section" id="disclaimer">
+<h3>Disclaimer<a class="headerlink" href="#disclaimer" title="Permalink to this headline">¶</a></h3>
+<p>Unlike IPRoute, which is mostly usable, though is far from
+complete yet, the IW module is in the very initial state.
+Neither the module itself, nor the message class cover the
+nl80211 functionality reasonably enough. So if you&#8217;re
+going to use it, brace yourself — debug is coming.</p>
+</div>
+<div class="section" id="messages">
+<h3>Messages<a class="headerlink" href="#messages" title="Permalink to this headline">¶</a></h3>
+<p>nl80211 messages are defined here:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">pyroute2</span><span class="o">/</span><span class="n">netlink</span><span class="o">/</span><span class="n">nl80211</span><span class="o">/</span><span class="n">__init__</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p>Pls notice NLAs of type <cite>hex</cite>. On the early development stage
+<cite>hex</cite> allows to inspect incoming data as a hex dump and,
+occasionally, even make requests with such NLAs. But it&#8217;s
+not a production way.</p>
+<p>The type <cite>hex</cite> in the NLA definitions means that this
+particular NLA is not handled yet properly. If you want to
+use some NLA which is defined as <cite>hex</cite> yet, pls find out a
+specific type, patch the message class and submit your pull
+request on github.</p>
+<p>If you&#8217;re not familiar with NLA types, take a look at RTNL
+definitions:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">pyroute2</span><span class="o">/</span><span class="n">netlink</span><span class="o">/</span><span class="n">rtnl</span><span class="o">/</span><span class="n">ndmsg</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p>and so on.</p>
+</div>
+<div class="section" id="communication-with-the-kernel">
+<h3>Communication with the kernel<a class="headerlink" href="#communication-with-the-kernel" title="Permalink to this headline">¶</a></h3>
+<p>There are several methods of the communication with the kernel.</p>
+<blockquote>
+<div><ul class="simple">
+<li><cite>sendto()</cite> — lowest possible, send a raw binary data</li>
+<li><cite>put()</cite> — send a netlink message</li>
+<li><cite>nlm_request()</cite> — send a message, return the response</li>
+<li><cite>get()</cite> — get a netlink message</li>
+<li><cite>recv()</cite> — get a raw binary data from the kernel</li>
+</ul>
+</div></blockquote>
+<p>There are no errors on <cite>put()</cite> usually. Any <cite>permission denied</cite>,
+any <cite>invalid value</cite> errors are returned from the kernel with
+netlink also. So if you do <cite>put()</cite>, but don&#8217;t do <cite>get()</cite>, be
+prepared to miss errors.</p>
+<p>The preferred method for the communication is <cite>nlm_request()</cite>.
+It tracks the message ID, returns the corresponding response.
+In the case of errors <cite>nlm_request()</cite> raises an exception.
+To get the response on any operation with nl80211, use flag
+<cite>NLM_F_ACK</cite>.</p>
+</div>
+<div class="section" id="reverse-it">
+<h3>Reverse it<a class="headerlink" href="#reverse-it" title="Permalink to this headline">¶</a></h3>
+<p>If you&#8217;re too lazy to read the kernel sources, but still need
+something not implemented here, you can use reverse engineering
+on a reference implementation. E.g.:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># strace -e trace=network -f -x -s 4096 \</span>
+        <span class="n">iw</span> <span class="n">phy</span> <span class="n">phy0</span> <span class="n">interface</span> <span class="n">add</span> <span class="n">test</span> <span class="nb">type</span> <span class="n">monitor</span>
+</pre></div>
+</div>
+<p>Will dump all the netlink traffic between the program <cite>iw</cite> and
+the kernel. Three first packets are the generic netlink protocol
+discovery, you can ignore them. All that follows, is the
+nl80211 traffic:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">sendmsg</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="p">{</span><span class="n">msg_name</span><span class="p">(</span><span class="mi">12</span><span class="p">)</span><span class="o">=</span><span class="p">{</span><span class="n">sa_family</span><span class="o">=</span><span class="n">AF_NETLINK</span><span class="p">,</span> <span class="o">...</span> <span class="p">},</span>
+    <span class="n">msg_iov</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;</span><span class="se">\x30\x00\x00\x00\x1b\x00\x05</span><span class="s2"> ...&quot;</span><span class="p">,</span> <span class="mi">48</span><span class="p">}],</span>
+    <span class="n">msg_controllen</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">msg_flags</span><span class="o">=</span><span class="mi">0</span><span class="p">},</span> <span class="mi">0</span><span class="p">)</span> <span class="o">=</span> <span class="mi">48</span>
+<span class="n">recvmsg</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="p">{</span><span class="n">msg_name</span><span class="p">(</span><span class="mi">12</span><span class="p">)</span><span class="o">=</span><span class="p">{</span><span class="n">sa_family</span><span class="o">=</span><span class="n">AF_NETLINK</span><span class="p">,</span> <span class="o">...</span> <span class="p">},</span>
+    <span class="n">msg_iov</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;</span><span class="se">\x58\x00\x00\x00\x1b\x00\x00</span><span class="s2"> ...&quot;</span><span class="p">,</span> <span class="mi">16384</span><span class="p">}],</span>
+    <span class="n">msg_controllen</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">msg_flags</span><span class="o">=</span><span class="mi">0</span><span class="p">},</span> <span class="mi">0</span><span class="p">)</span> <span class="o">=</span> <span class="mi">88</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+<p>With <cite>-s 4096</cite> you will get the full dump. Then copy the strings
+from <cite>msg_iov</cite> to a file, let&#8217;s say <cite>data</cite>, and run the decoder:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>$ pwd
+/home/user/Projects/pyroute2
+$ export PYTHONPATH=`pwd`
+$ python scripts/decoder.py pyroute2.netlink.nl80211.nl80211cmd data
+</pre></div>
+</div>
+<p>You will get the session decoded:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;NL80211_ATTR_WIPHY&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_IFNAME&#39;</span><span class="p">,</span> <span class="s1">&#39;test&#39;</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_IFTYPE&#39;</span><span class="p">,</span> <span class="mi">6</span><span class="p">]],</span>
+ <span class="s1">&#39;cmd&#39;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+ <span class="s1">&#39;header&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+            <span class="s1">&#39;length&#39;</span><span class="p">:</span> <span class="mi">48</span><span class="p">,</span>
+            <span class="s1">&#39;pid&#39;</span><span class="p">:</span> <span class="mi">3292542647</span><span class="p">,</span>
+            <span class="s1">&#39;sequence_number&#39;</span><span class="p">:</span> <span class="mi">1430426434</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="mi">27</span><span class="p">},</span>
+ <span class="s1">&#39;reserved&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+<span class="p">{</span><span class="s1">&#39;attrs&#39;</span><span class="p">:</span> <span class="p">[[</span><span class="s1">&#39;NL80211_ATTR_IFINDEX&#39;</span><span class="p">,</span> <span class="mi">23811</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_IFNAME&#39;</span><span class="p">,</span> <span class="s1">&#39;test&#39;</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_WIPHY&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_IFTYPE&#39;</span><span class="p">,</span> <span class="mi">6</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_WDEV&#39;</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_MAC&#39;</span><span class="p">,</span> <span class="s1">&#39;a4:4e:31:43:1c:7c&#39;</span><span class="p">],</span>
+           <span class="p">[</span><span class="s1">&#39;NL80211_ATTR_GENERATION&#39;</span><span class="p">,</span> <span class="s1">&#39;02:00:00:00&#39;</span><span class="p">]],</span>
+ <span class="s1">&#39;cmd&#39;</span><span class="p">:</span> <span class="mi">7</span><span class="p">,</span>
+ <span class="s1">&#39;header&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;flags&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s1">&#39;length&#39;</span><span class="p">:</span> <span class="mi">88</span><span class="p">,</span>
+            <span class="s1">&#39;pid&#39;</span><span class="p">:</span> <span class="mi">3292542647</span><span class="p">,</span>
+            <span class="s1">&#39;sequence_number&#39;</span><span class="p">:</span> <span class="mi">1430426434</span><span class="p">,</span>
+            <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="mi">27</span><span class="p">},</span>
+ <span class="s1">&#39;reserved&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+ <span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Now you know, how to do a request and what you will get as a
+response. Sample collected data is in the <cite>scripts</cite> directory.</p>
+</div>
+<div class="section" id="submit-changes">
+<h3>Submit changes<a class="headerlink" href="#submit-changes" title="Permalink to this headline">¶</a></h3>
+<p>Please do not hesitate to submit the changes on github. Without
+your patches this module will not evolve.</p>
+</div>
+</div>
+<div class="section" id="network-settings-daemon-pyrouted">
+<h2>Network settings daemon &#8211; pyrouted<a class="headerlink" href="#network-settings-daemon-pyrouted" title="Permalink to this headline">¶</a></h2>
+<p>Pyrouted is a standalone project of a system service, that
+utilizes the <cite>pyroute2</cite> library. It consists of a daemon
+controlled by <cite>systemd</cite> and a CLI utility that communicates
+with the daemon via UNIX socket.</p>
+<ul class="simple">
+<li>home: <a class="reference external" href="https://github.com/svinota/pyrouted">https://github.com/svinota/pyrouted</a></li>
+<li>bugs: <a class="reference external" href="https://github.com/svinota/pyrouted/issues">https://github.com/svinota/pyrouted/issues</a></li>
+<li>pypi: <a class="reference external" href="https://pypi.python.org/pypi/pyrouted">https://pypi.python.org/pypi/pyrouted</a></li>
+</ul>
+<p>It is an extremely simple and basic network interface setup
+tool.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Modules in progress</a><ul>
+<li><a class="reference internal" href="#ipset-module">IPSet module</a></li>
+<li><a class="reference internal" href="#iw-module">IW module</a><ul>
+<li><a class="reference internal" href="#disclaimer">Disclaimer</a></li>
+<li><a class="reference internal" href="#messages">Messages</a></li>
+<li><a class="reference internal" href="#communication-with-the-kernel">Communication with the kernel</a></li>
+<li><a class="reference internal" href="#reverse-it">Reverse it</a></li>
+<li><a class="reference internal" href="#submit-changes">Submit changes</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#network-settings-daemon-pyrouted">Network settings daemon &#8211; pyrouted</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/devmodules.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>

@@ -11,7 +11,10 @@ import errno
 import types
 import struct
 import socket
+import logging
 import threading
+
+log = logging.getLogger(__name__)
 
 try:
     basestring = basestring
@@ -76,8 +79,12 @@ class View(object):
     '''
     A read-only view of a dictionary object.
     '''
-    def __init__(self, src=None, constraint=lambda k, v: True):
+    def __init__(self, src=None, path=None, constraint=lambda k, v: True):
         self.src = src if src is not None else {}
+        if path is not None:
+            path = path.split('/')
+            for step in path:
+                self.src = getattr(self.src, step)
         self.constraint = constraint
 
     def __getitem__(self, key):
@@ -104,7 +111,7 @@ class View(object):
                 if self.constraint(key, value):
                     ret.append((key, value))
             except Exception as e:
-                print(e)
+                log.error("view filter error: %s", e)
         return ret
 
     def keys(self):

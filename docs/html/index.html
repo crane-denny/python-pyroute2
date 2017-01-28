@@ -1,0 +1,260 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pyroute2 netlink library &#8212; pyroute2 0.4.12 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.4.12',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="top" title="pyroute2 0.4.12 documentation" href="#" />
+    <link rel="next" title="pyroute2" href="general.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="general.html" title="pyroute2"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <img alt="_images/ericsson.png" class="align-right" src="_images/ericsson.png" />
+<div class="section" id="pyroute2-netlink-library">
+<h1>pyroute2 netlink library<a class="headerlink" href="#pyroute2-netlink-library" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="general-information">
+<h2>General information<a class="headerlink" href="#general-information" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="general.html">pyroute2</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="general.html#rtnetlink-sample">rtnetlink sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="general.html#network-namespace-samples">network namespace samples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="general.html#installation">installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="general.html#requires">requires</a></li>
+<li class="toctree-l2"><a class="reference internal" href="general.html#links">links</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="makefile.html">makefile documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-clean">target: clean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-docs">target: docs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-epydoc">target: epydoc</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-test">target: test</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-test-ci">target: test-ci</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-dist">target: dist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-install">target: install</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#target-develop">target: develop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="makefile.html#other-targets">other targets</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="report.html">report a bug</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#runtime">Runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#resource-release">Resource release</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#signal-handlers">Signal handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#imports">Imports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html#special-cases">Special cases</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#eventlet">eventlet</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="iproute.html">IPRoute module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#iproute-quickstart">IPRoute quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#responses">Responses</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#threaded-vs-threadless-architecture">Threaded vs. threadless architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#think-about-ipdb">Think about IPDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#api">API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#module-pyroute2.netlink.rtnl.tcmsg.sched_drr">Queueing disciplines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iproute.html#module-pyroute2.netlink.rtnl.tcmsg.cls_u32">Filters</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ipdb.html">IPDB module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#ipdb-vs-iproute">IPDB vs. IPRoute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#quickstart">Quickstart</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#transaction-modes">Transaction modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#context-managers">Context managers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#create-interfaces">Create interfaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#bridge-interfaces">Bridge interfaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#ports-management">Ports management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#routes-management">Routes management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#rules-management">Rules management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#performance-issues">Performance issues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ipdb.html#the-class-api">The class API</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="netns.html">Netns management overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="netns.html#move-an-interface-to-a-namespace">Move an interface to a namespace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="netns.html#manage-interfaces-within-a-netns">Manage interfaces within a netns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="netns.html#spawn-a-process-within-a-netns">Spawn a process within a netns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="netns.html#list-set-create-and-remove-netns">List, set, create and remove netns</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="netns.html#netns">NetNS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="netns.html#nspopen">NSPopen</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="howtos">
+<h2>Howtos<a class="headerlink" href="#howtos" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="mpls.html">MPLS howto</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mpls.html#mpls-labels">MPLS labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mpls.html#iproute">IPRoute</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mpls.html#ipdb">IPDB</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Netlink debug howto</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="debug.html#dump-data">Dump data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="debug.html#decode-data">Decode data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="debug.html#compile-data">Compile data</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="development">
+<h2>Development<a class="headerlink" href="#development" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="devcontribute.html">Project contribution guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="devcontribute.html#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devcontribute.html#testing">Testing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="devcontribute.html#links">Links</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="arch.html">Module architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="arch.html#sockets">Sockets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="arch.html#netlink-messages">Netlink messages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="arch.html#ipdb">IPDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="arch.html#internet-protocols">Internet protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="netlink.html">Netlink</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="netlink.html#basics">basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="netlink.html#pyroute2-and-netlink">pyroute2 and netlink</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="nlsocket.html">Base netlink socket and marshal</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="nlsocket.html#asynchronous-i-o">asynchronous I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nlsocket.html#enobuf-and-async-i-o">ENOBUF and async I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nlsocket.html#when-async-i-o-doesn-t-help">when async I/O doesn&#8217;t help</a></li>
+<li class="toctree-l2"><a class="reference internal" href="nlsocket.html#classes">classes</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">pyroute2 netlink library</a><ul>
+<li><a class="reference internal" href="#general-information">General information</a></li>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#howtos">Howtos</a></li>
+<li><a class="reference internal" href="#development">Development</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+  <h4>Next topic</h4>
+  <p class="topless"><a href="general.html"
+                        title="next chapter">pyroute2</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <div><input type="text" name="q" /></div>
+      <div><input type="submit" value="Go" /></div>
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="general.html" title="pyroute2"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">pyroute2 0.4.12 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+    </div>
+  </body>
+</html>
