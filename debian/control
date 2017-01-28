@@ -39,4 +39,13 @@ Description: Python3 Netlink library
  it is possible.
  .
  This is the Python 3 compatible package.
- 
+
+Package: python-pyroute2-doc
+Architecture: all
+Section: doc
+Depends: ${misc:Depends}
+Description: netlink and Linux network configuration library (documentation)
+ Pyroute2 is a pure Python netlink and Linux network configuration
+ library. It requires only Python stdlib, no 3rd party libraries.
+ .
+ This package contains the Python module documentation.
