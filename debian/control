@@ -17,6 +17,8 @@ VCS-Git: https://github.com/craneworks/python-pyroute2.git
 Package: python-pyroute2
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}
+Provides: ${python:Provides}
+Recommends: ${python:Recommends}
 Description: Python Netlink library
  Pyroute2 is a pure Python netlink and Linux network configuration
  library. It requires only Python stdlib, no 3rd party libraries.
@@ -28,6 +30,8 @@ Description: Python Netlink library
 Package: python3-pyroute2
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}
+Provides: ${python3:Provides}
+Recommends: ${python3:Recommends}
 Description: Python3 Netlink library
  Pyroute2 is a pure Python netlink and Linux network configuration
  library. It requires only Python stdlib, no 3rd party libraries.
