@@ -1,3 +1,9 @@
+pyroute2 (0.4.12-1) UNRELEASED; urgency=medium
+
+  * Bumping to version 0.4.12 (Closes: #830114)
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Sat, 28 Jan 2017 18:06:26 +0100
+
 pyroute2 (0.3.16-1) unstable; urgency=medium
 
   * Bumping to version 0.3.16 (Closes: #797778)
