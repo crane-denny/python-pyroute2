@@ -6,6 +6,7 @@ pyroute2 (0.4.12-1) UNRELEASED; urgency=medium
   * Adding 'Provides' and 'Recommends' to package (Thanks to Federico Ceratto)
   * Bumping debhelper to version 10
   * Update copyright informations
+  * Adding README.md and examples/* to package (THanks to Federico Ceratto)
 
  -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Sat, 28 Jan 2017 18:06:26 +0100
 
