@@ -1,4 +1,4 @@
-pyroute2 (0.4.12-2) experimental; urgency=medium
+pyroute2 (0.4.12-2) unstable; urgency=medium
 
   * Adding docs package (Thanks to Federico Ceratto)
     For now we only ship pre-build documentation
