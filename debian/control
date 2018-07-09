@@ -8,6 +8,7 @@ Build-Depends-Indep:
  python-all,
  python-doc,
  python-sphinx,
+ python3-sphinx,
  python3-all
 Standards-Version: 4.1.5
 Homepage: https://pypi.python.org/pypi/pyroute2
