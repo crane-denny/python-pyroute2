@@ -1,0 +1,15 @@
+<map id="inheritance6944cdc46b" name="inheritance6944cdc46b">
+<area shape="rect" id="node1" title="Netlink control message" alt="" coords="657,19,729,44"/>
+<area shape="rect" id="node2" title="Generic netlink message" alt="" coords="480,104,559,129"/>
+<area shape="rect" id="node3" title="IP rule message" alt="" coords="483,153,555,179"/>
+<area shape="rect" id="node4" title="Main netlink message class" alt="" coords="325,252,397,277"/>
+<area shape="rect" id="node5" title="IP address information" alt="" coords="475,203,563,228"/>
+<area shape="rect" id="node16" title="ARP cache update message" alt="" coords="483,400,555,425"/>
+<area shape="rect" id="node6" title="Network interface message." alt="" coords="322,55,401,80"/>
+<area shape="rect" id="node9" title="Main NLA class" alt="" coords="325,5,397,31"/>
+<area shape="rect" id="node14" title="Since the support just begins to be developed," alt="" coords="648,351,737,376"/>
+<area shape="rect" id="node18" title="The NLA base class. Use `nla_header` class as the header." alt="" coords="169,5,249,31"/>
+<area shape="rect" id="node19" title="A collection of base NLA types" alt="" coords="153,55,264,80"/>
+<area shape="rect" id="node20" title="Netlink base class. You do not need to inherit it directly, unless" alt="" coords="5,31,105,56"/>
+<area shape="rect" id="node23" title="Route message" alt="" coords="312,499,411,524"/>
+</map>

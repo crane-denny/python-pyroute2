@@ -15,14 +15,16 @@ if config.kernel < [3, 3, 0]:
     from pyroute2.netlink.rtnl.ifinfmsg.compat import proxy_dellink
     from pyroute2.netlink.rtnl.ifinfmsg.compat import proxy_linkinfo
 else:
-    from pyroute2.netlink.rtnl.ifinfmsg import proxy_newlink
-    from pyroute2.netlink.rtnl.ifinfmsg import proxy_setlink
+    from pyroute2.netlink.rtnl.ifinfmsg.proxy import proxy_newlink
+    from pyroute2.netlink.rtnl.ifinfmsg.proxy import proxy_setlink
 
 
 class IPRSocketMixin(object):
 
-    def __init__(self, fileno=None, all_ns=False):
+    def __init__(self, fileno=None, sndbuf=1048576, rcvbuf=1048576,
+                 all_ns=False):
         super(IPRSocketMixin, self).__init__(NETLINK_ROUTE, fileno=fileno,
+                                             sndbuf=sndbuf, rcvbuf=rcvbuf,
                                              all_ns=all_ns)
         self.marshal = MarshalRtnl()
         self._s_channel = None
@@ -44,10 +46,10 @@ class IPRSocketMixin(object):
             self.recv_ft = self._p_recv_ft
 
     def clone(self):
-        return type(self)()
+        return type(self)(sndbuf=self._sndbuf, rcvbuf=self._rcvbuf)
 
-    def bind(self, groups=rtnl.RTNL_GROUPS, async=False):
-        super(IPRSocketMixin, self).bind(groups, async=async)
+    def bind(self, groups=rtnl.RTMGRP_DEFAULTS, **kwarg):
+        super(IPRSocketMixin, self).bind(groups, **kwarg)
 
     def _gate(self, msg, addr):
         msg.reset()
@@ -154,18 +156,4 @@ class IPRSocket(IPRSocketMixin, NetlinkSocket):
           'type': 1}]
         >>>
     '''
-    pass
-
-
-class RawIPRSocketMixin(object):
-
-    def __init__(self, fileno=None):
-        super(RawIPRSocketMixin, self).__init__(NETLINK_ROUTE, fileno=fileno)
-        self.marshal = MarshalRtnl()
-
-    def bind(self, groups=rtnl.RTNL_GROUPS, async=False):
-        super(RawIPRSocketMixin, self).bind(groups, async=async)
-
-
-class RawIPRSocket(RawIPRSocketMixin, NetlinkSocket):
     pass

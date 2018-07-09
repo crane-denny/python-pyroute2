@@ -6,13 +6,13 @@ import struct
 import threading
 import subprocess
 from fcntl import ioctl
-from pyroute2 import RawIPRoute
 from pyroute2 import config
 from pyroute2.common import map_enoent
 from pyroute2.netlink.rtnl import RTM_VALUES
 from pyroute2.netlink.rtnl.marshal import MarshalRtnl
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
 from pyroute2.netlink.exceptions import NetlinkError
+from pyroute2.netlink.rtnl.riprsocket import RawIPRSocket
 
 
 # it's simpler to double constants here, than to change all the
@@ -28,7 +28,7 @@ _BONDING_MASTER = '/sys/class/net/%s/master/ifindex'
 IFNAMSIZ = 16
 
 TUNDEV = '/dev/net/tun'
-if config.machine in ('i386', 'i686', 'x86_64'):
+if config.machine in ('i386', 'i686', 'x86_64', 's390x'):
     TUNSETIFF = 0x400454ca
     TUNSETPERSIST = 0x400454cb
     TUNSETOWNER = 0x400454cc
@@ -227,7 +227,7 @@ def sync(f):
     forwarded.
     '''
     def monitor(event, ifname, cmd):
-        with RawIPRoute() as ipr:
+        with RawIPRSocket() as ipr:
             poll = select.poll()
             poll.register(ipr, select.POLLIN | select.POLLPRI)
             poll.register(cmd, select.POLLIN | select.POLLPRI)

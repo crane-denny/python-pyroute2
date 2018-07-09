@@ -1,37 +1,26 @@
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    
-    <title>Netlink debug howto &#8212; pyroute2 0.4.12 documentation</title>
-    
+    <title>Netlink debug howto &#8212; pyroute2 0.5.2 documentation</title>
     <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    
-    <script type="text/javascript">
-      var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:    './',
-        VERSION:     '0.4.12',
-        COLLAPSE_INDEX: false,
-        FILE_SUFFIX: '.html',
-        HAS_SOURCE:  true
-      };
-    </script>
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
     <link rel="next" title="Project contribution guide" href="devcontribute.html" />
     <link rel="prev" title="MPLS howto" href="mpls.html" /> 
-  </head>
-  <body role="document">
+  </head><body>
+
     <div class="related" role="navigation" aria-label="related navigation">
-      <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
           <a href="genindex.html" title="General Index"
@@ -45,9 +34,11 @@
         <li class="right" >
           <a href="mpls.html" title="MPLS howto"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
       </ul>
-    </div>  
+        </div>
+  
 
     <div class="document">
       <div class="documentwrapper">
@@ -62,7 +53,7 @@
 process with <cite>strace -p</cite>. Use <cite>-s {int}</cite> argument to make sure that all
 the messages are dumped. The <cite>-x</cite> argument instructs <cite>strace</cite> to produce
 output in the hex format that can be passed to the pyroute2 decoder:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ strace -e trace=network -x -s 16384 ip ro
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ strace -e trace=network -x -s 16384 ip ro
 socket(PF_NETLINK, SOCK_RAW|SOCK_CLOEXEC, NETLINK_ROUTE) = 3
 setsockopt(3, SOL_SOCKET, SO_SNDBUF, [32768], 4) = 0
 setsockopt(3, SOL_SOCKET, SO_RCVBUF, [1048576], 4) = 0
@@ -82,28 +73,37 @@ recvmsg(3, {msg_name(12)={sa_family=AF_NETLINK, pid=0, groups=00000000},
 </div>
 <p>Now you can copy <cite>send…()</cite> and <cite>recv…()</cite> buffer strings to a file.</p>
 </div>
+<div class="section" id="strace-compatibility-note">
+<h2>Strace compatibility note<a class="headerlink" href="#strace-compatibility-note" title="Permalink to this headline">¶</a></h2>
+<p>Starting with version 4.13, <cite>strace</cite> parses Netlink message headers and
+displays them in their parsed form instead of displaying the whole buffer in
+its raw form. The rest of the buffer is still shown, but due to it being
+incomplete, the method mentioned above doesn’t work anymore.</p>
+<p>For the time being, the easiest workaround is probably to use an older strace
+version as it only depends on libc6.</p>
+</div>
 <div class="section" id="decode-data">
 <h2>Decode data<a class="headerlink" href="#decode-data" title="Permalink to this headline">¶</a></h2>
 <p>The decoder is not provided with rpm or pip packages, so you should
 have a local git repo of the project:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ git clone &lt;url&gt;
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ git clone &lt;url&gt;
 $ cd pyroute2
 </pre></div>
 </div>
 <p>Now run the decoder:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ export PYTHONPATH=`pwd`
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ export PYTHONPATH=`pwd`
 $ python tests/decoder/decoder.py &lt;message.class&gt; &lt;data&gt;
 </pre></div>
 </div>
 <p>E.g. for the route dump in the file <cite>rt.dump</cite> the command line
 should be:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ python tests/decoder/decoder.py \
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ python tests/decoder/decoder.py \
     pyroute2.netlink.rtnl.rtmsg.rtmsg \
     rt.dump
 </pre></div>
 </div>
 <p><strong>Why should I specify the message class?</strong> Why there is no marshalling
-in the decoder script? &#8216;Cause it is intended to be used with different
+in the decoder script? ‘Cause it is intended to be used with different
 netlink protocols, not only RTNL, but also nl80211, nfnetlink etc.
 There is no common marshalling for all the netlink protocols.</p>
 <p><strong>How to specify the message class?</strong> All the netlink protocols are
@@ -125,7 +125,7 @@ want.</li>
 <li>The <cite>#!</cite> symbols start a comment until the end of the file.</li>
 </ul>
 <p>Example:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># ifinfmsg headers</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># ifinfmsg headers</span>
 <span class="c1">#</span>
 <span class="c1"># nlmsg header</span>
 \<span class="n">x84</span>\<span class="n">x00</span>\<span class="n">x00</span>\<span class="n">x00</span>  <span class="c1"># length</span>
@@ -149,7 +149,7 @@ want.</li>
 only compiles and collects requests instead of sending them to the
 kernel. E.g., it is used by <cite>IPBatch</cite>, that combines <cite>BatchSocket</cite>
 with <cite>IPRouteMixin</cite>, providing RTNL compiler:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ python3
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ python3
 Python 3.4.3 (default, Mar 31 2016, 20:42:37)
 [GCC 5.3.1 20151207 (Red Hat 5.3.1-2)] on linux
 Type &quot;help&quot;, &quot;copyright&quot;, &quot;credits&quot; or &quot;license&quot; for more information.
@@ -181,7 +181,7 @@ instead of <cite>hexdump(ipb.batch)</cite>.</p>
 requests, when one <cite>send()</cite> call sends several messages at once, or
 to produce binary buffers to test your own netlink parsers. Or just
 to dump some data to be sent later and probably even on another host:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">ipr</span><span class="o">.</span><span class="n">sendto</span><span class="p">(</span><span class="n">ipb</span><span class="o">.</span><span class="n">batch</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
 </pre></div>
 </div>
@@ -200,6 +200,7 @@ so if there will be any responses, they can be handled as broadcasts.</p>
   <ul>
 <li><a class="reference internal" href="#">Netlink debug howto</a><ul>
 <li><a class="reference internal" href="#dump-data">Dump data</a></li>
+<li><a class="reference internal" href="#strace-compatibility-note">Strace compatibility note</a></li>
 <li><a class="reference internal" href="#decode-data">Decode data</a></li>
 <li><a class="reference internal" href="#compile-data">Compile data</a></li>
 </ul>
@@ -215,18 +216,20 @@ so if there will be any responses, they can be handled as broadcasts.</p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
-      <li><a href="_sources/debug.txt"
+      <li><a href="_sources/debug.rst.txt"
             rel="nofollow">Show Source</a></li>
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
+    <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <div><input type="text" name="q" /></div>
-      <div><input type="submit" value="Go" /></div>
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
       <input type="hidden" name="check_keywords" value="yes" />
       <input type="hidden" name="area" value="default" />
     </form>
+    </div>
 </div>
 <script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
@@ -248,12 +251,13 @@ so if there will be any responses, they can be handled as broadcasts.</p>
         <li class="right" >
           <a href="mpls.html" title="MPLS howto"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2013, Peter V. Saveliev.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.7.2.
     </div>
   </body>
 </html>
