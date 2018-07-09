@@ -2,14 +2,14 @@ Source: pyroute2
 Maintainer: Florian Pelgrim <florian.pelgrim@craneworks.de>
 Section: python
 Priority: optional
-Build-Depends: debhelper (>= 10~)
+Build-Depends: debhelper (>= 11~)
 Build-Depends-Indep:
  dh-python,
  python-all,
  python-doc,
  python-sphinx,
  python3-all
-Standards-Version: 3.9.8
+Standards-Version: 4.1.5
 Homepage: https://pypi.python.org/pypi/pyroute2
 VCS-Browser: https://github.com/craneworks/python-pyroute2
 VCS-Git: https://github.com/craneworks/python-pyroute2.git
