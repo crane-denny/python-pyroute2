@@ -45,7 +45,10 @@ Description: Python3 Netlink library
 Package: python-pyroute2-doc
 Architecture: all
 Section: doc
-Depends: ${misc:Depends}
+Depends:
+ libjs-underscore,
+ libjs-jquery,
+ ${misc:Depends}
 Description: netlink and Linux network configuration library (documentation)
  Pyroute2 is a pure Python netlink and Linux network configuration
  library. It requires only Python stdlib, no 3rd party libraries.
