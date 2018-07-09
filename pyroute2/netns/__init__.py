@@ -77,12 +77,20 @@ loading this module, dumps the core, one can check the
 SELinux state with `getenforce` command.
 
 '''
-
+import io
 import os
 import os.path
 import errno
 import ctypes
+import pickle
+import struct
+import traceback
 from pyroute2 import config
+from pyroute2.common import basestring
+try:
+    file = file
+except NameError:
+    file = io.IOBase
 
 # FIXME: arch reference
 __NR = {'x86_': {'64bit': 308},
@@ -91,7 +99,10 @@ __NR = {'x86_': {'64bit': 308},
         'mips': {'32bit': 4344,
                  '64bit': 5303},  # FIXME: NABI32?
         'armv': {'32bit': 375},
-        'aarc': {'64bit': 268}}  # FIXME: EABI vs. OABI?
+        'aarc': {'32bit': 375,
+                 '64bit': 268},  # FIXME: EABI vs. OABI?
+        'ppc6': {'64bit': 350},
+        's390': {'64bit': 339}}
 __NR_setns = __NR.get(config.machine[:4], {}).get(config.arch, 308)
 
 CLONE_NEWNET = 0x40000000
@@ -128,10 +139,7 @@ def listnetns(nspath=None):
             raise
 
 
-def create(netns, libc=None):
-    '''
-    Create a network namespace.
-    '''
+def _create(netns, libc=None):
     libc = libc or ctypes.CDLL('libc.so.6', use_errno=True)
     netnspath = _get_netnspath(netns)
     netnsdir = os.path.dirname(netnspath)
@@ -164,6 +172,35 @@ def create(netns, libc=None):
         raise OSError(ctypes.get_errno(), 'mount failed', netns)
 
 
+def create(netns, libc=None):
+    '''
+    Create a network namespace.
+    '''
+    rctl, wctl = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        # child
+        error = None
+        try:
+            _create(netns, libc)
+        except Exception as e:
+            error = e
+            error.tb = traceback.format_exc()
+        msg = pickle.dumps(error)
+        os.write(wctl, struct.pack('I', len(msg)))
+        os.write(wctl, msg)
+        os._exit(0)
+    else:
+        # parent
+        msglen = struct.unpack('I', os.read(rctl, 4))[0]
+        error = pickle.loads(os.read(rctl, msglen))
+        os.close(rctl)
+        os.close(wctl)
+        os.waitpid(pid, 0)
+        if error is not None:
+            raise error
+
+
 def remove(netns, libc=None):
     '''
     Remove a network namespace.
@@ -183,19 +220,30 @@ def setns(netns, flags=os.O_CREAT, libc=None):
 
         - O_CREAT -- create netns, if doesn't exist
         - O_CREAT | O_EXCL -- create only if doesn't exist
+
+    Changed in 0.5.1: the routine closes the ns fd if it's
+    not provided via arguments.
     '''
+    newfd = False
     libc = libc or ctypes.CDLL('libc.so.6', use_errno=True)
-    netnspath = _get_netnspath(netns)
-
-    if os.path.basename(netns) in listnetns(os.path.dirname(netns)):
-        if flags & (os.O_CREAT | os.O_EXCL) == (os.O_CREAT | os.O_EXCL):
-            raise OSError(errno.EEXIST, 'netns exists', netns)
+    if isinstance(netns, basestring):
+        netnspath = _get_netnspath(netns)
+        if os.path.basename(netns) in listnetns(os.path.dirname(netns)):
+            if flags & (os.O_CREAT | os.O_EXCL) == (os.O_CREAT | os.O_EXCL):
+                raise OSError(errno.EEXIST, 'netns exists', netns)
+        else:
+            if flags & os.O_CREAT:
+                create(netns, libc=libc)
+        nsfd = os.open(netnspath, os.O_RDONLY)
+        newfd = True
+    elif isinstance(netns, file):
+        nsfd = netns.fileno()
+    elif isinstance(netns, int):
+        nsfd = netns
     else:
-        if flags & os.O_CREAT:
-            create(netns, libc=libc)
-
-    nsfd = os.open(netnspath, os.O_RDONLY)
-    ret = libc.syscall(__NR_setns, nsfd, CLONE_NEWNET)
-    if ret != 0:
+        raise RuntimeError('netns should be a string or an open fd')
+    error = libc.syscall(__NR_setns, nsfd, CLONE_NEWNET)
+    if newfd:
+        os.close(nsfd)
+    if error != 0:
         raise OSError(ctypes.get_errno(), 'failed to open netns', netns)
-    return nsfd

@@ -1,0 +1,241 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Generators &#8212; pyroute2 0.5.2 documentation</title>
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
+      </ul>
+        </div>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="generators">
+<h1>Generators<a class="headerlink" href="#generators" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="problem">
+<h2>Problem<a class="headerlink" href="#problem" title="Permalink to this headline">¶</a></h2>
+<p>Until 0.5.2 Pyroute2 collected all the responses in a list
+and returned them at once. It may be ok as long as there is
+not so many objects to return. But let’s say there are some
+thousands of routes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ ip ro | wc -l
+315417
+</pre></div>
+</div>
+<p>Now we use a script to retrieve the routes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">config</span>
+<span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+
+<span class="n">config</span><span class="o">.</span><span class="n">nlm_generator</span> <span class="o">=</span> <span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span>
+                        <span class="k">else</span> <span class="s1">&#39;false&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;true&#39;</span>
+
+<span class="k">with</span> <span class="n">IPRoute</span><span class="p">()</span> <span class="k">as</span> <span class="n">ipr</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">route</span> <span class="ow">in</span> <span class="n">ipr</span><span class="o">.</span><span class="n">get_routes</span><span class="p">():</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<p>If the library collects all the routes in a list and returns
+the list, it may take a lot of memory:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ /usr/bin/time -v python e.py false
+    Command being timed: &quot;python e.py false&quot;
+    User time (seconds): 30.42
+    System time (seconds): 3.63
+    Percent of CPU this job got: 99%
+    Elapsed (wall clock) time (h:mm:ss or m:ss): 0:34.09
+    Average shared text size (kbytes): 0
+    Average unshared data size (kbytes): 0
+    Average stack size (kbytes): 0
+    Average total size (kbytes): 0
+    Maximum resident set size (kbytes): 2416472
+    Average resident set size (kbytes): 0
+    Major (requiring I/O) page faults: 0
+    Minor (reclaiming a frame) page faults: 604787
+    Voluntary context switches: 9
+    Involuntary context switches: 688
+    Swaps: 0
+    File system inputs: 0
+    File system outputs: 0
+    Socket messages sent: 0
+    Socket messages received: 0
+    Signals delivered: 0
+    Page size (bytes): 4096
+    Exit status: 0
+</pre></div>
+</div>
+<p>2416472 kbytes of RSS. Pretty much.</p>
+</div>
+<div class="section" id="solution">
+<h2>Solution<a class="headerlink" href="#solution" title="Permalink to this headline">¶</a></h2>
+<p>Now we use generator to iterate the results:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ /usr/bin/time -v python e.py true
+    Command being timed: &quot;python e.py true&quot;
+    User time (seconds): 18.48
+    System time (seconds): 0.99
+    Percent of CPU this job got: 99%
+    Elapsed (wall clock) time (h:mm:ss or m:ss): 0:19.49
+    Average shared text size (kbytes): 0
+    Average unshared data size (kbytes): 0
+    Average stack size (kbytes): 0
+    Average total size (kbytes): 0
+    Maximum resident set size (kbytes): 45132
+    Average resident set size (kbytes): 0
+    Major (requiring I/O) page faults: 0
+    Minor (reclaiming a frame) page faults: 433589
+    Voluntary context switches: 9
+    Involuntary context switches: 244
+    Swaps: 0
+    File system inputs: 0
+    File system outputs: 0
+    Socket messages sent: 0
+    Socket messages received: 0
+    Signals delivered: 0
+    Page size (bytes): 4096
+    Exit status: 0
+</pre></div>
+</div>
+<p>45132 kbytes of RSS. That’s the difference. Say we have a bit more
+routes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ ip ro | wc -l
+678148
+</pre></div>
+</div>
+<p>Without generators the script will simply run ot of memory. But with
+the generators:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ /usr/bin/time -v python e.py true
+    Command being timed: &quot;python e.py true&quot;
+    User time (seconds): 39.63
+    System time (seconds): 2.78
+    Percent of CPU this job got: 99%
+    Elapsed (wall clock) time (h:mm:ss or m:ss): 0:42.75
+    Average shared text size (kbytes): 0
+    Average unshared data size (kbytes): 0
+    Average stack size (kbytes): 0
+    Average total size (kbytes): 0
+    Maximum resident set size (kbytes): 45324
+    Average resident set size (kbytes): 0
+    Major (requiring I/O) page faults: 0
+    Minor (reclaiming a frame) page faults: 925560
+    Voluntary context switches: 11
+    Involuntary context switches: 121182
+    Swaps: 0
+    File system inputs: 0
+    File system outputs: 0
+    Socket messages sent: 0
+    Socket messages received: 0
+    Signals delivered: 0
+    Page size (bytes): 4096
+    Exit status: 0
+</pre></div>
+</div>
+<p>Again, 45324 kbytes of RSS.</p>
+</div>
+<div class="section" id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h2>
+<p>To turn the generator option on, one should set <code class="docutils literal notranslate"><span class="pre">pyroute2.config.nlm_generator</span></code>
+to <code class="docutils literal notranslate"><span class="pre">True</span></code>. By default is <code class="docutils literal notranslate"><span class="pre">False</span></code> not to break existing projects.:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">config</span>
+<span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+
+<span class="n">config</span><span class="o">.</span><span class="n">nlm_generator</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">with</span> <span class="n">IPRoute</span><span class="p">()</span> <span class="k">as</span> <span class="n">ipr</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">route</span> <span class="ow">in</span> <span class="n">ipr</span><span class="o">.</span><span class="n">get_routes</span><span class="p">():</span>
+        <span class="n">handle</span><span class="p">(</span><span class="n">route</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="iproute-and-generators">
+<h2>IPRoute and generators<a class="headerlink" href="#iproute-and-generators" title="Permalink to this headline">¶</a></h2>
+<p>IPRoute objects will return generators only for methods that employ <code class="docutils literal notranslate"><span class="pre">GET_...</span></code>
+requests like <code class="docutils literal notranslate"><span class="pre">get_routes()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_links()</span></code>, <code class="docutils literal notranslate"><span class="pre">link('dump',</span> <span class="pre">...)</span></code>, <code class="docutils literal notranslate"><span class="pre">addr('dump',</span> <span class="pre">...)</span></code>.
+Setters will work as usually to apply changes immediately.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Generators</a><ul>
+<li><a class="reference internal" href="#problem">Problem</a></li>
+<li><a class="reference internal" href="#solution">Solution</a></li>
+<li><a class="reference internal" href="#configuration">Configuration</a></li>
+<li><a class="reference internal" href="#iproute-and-generators">IPRoute and generators</a></li>
+</ul>
+</li>
+</ul>
+
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/generator.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.7.2.
+    </div>
+  </body>
+</html>

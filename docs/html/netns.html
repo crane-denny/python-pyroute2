@@ -1,37 +1,26 @@
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    
-    <title>Netns management overview &#8212; pyroute2 0.4.12 documentation</title>
-    
+    <title>Netns management overview &#8212; pyroute2 0.5.2 documentation</title>
     <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    
-    <script type="text/javascript">
-      var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:    './',
-        VERSION:     '0.4.12',
-        COLLAPSE_INDEX: false,
-        FILE_SUFFIX: '.html',
-        HAS_SOURCE:  true
-      };
-    </script>
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
     <link rel="next" title="MPLS howto" href="mpls.html" />
-    <link rel="prev" title="IPDB module" href="ipdb.html" /> 
-  </head>
-  <body role="document">
+    <link rel="prev" title="IPSet module" href="ipset.html" /> 
+  </head><body>
+
     <div class="related" role="navigation" aria-label="related navigation">
-      <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
           <a href="genindex.html" title="General Index"
@@ -43,11 +32,13 @@
           <a href="mpls.html" title="MPLS howto"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="ipdb.html" title="IPDB module"
+          <a href="ipset.html" title="IPSet module"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
       </ul>
-    </div>  
+        </div>
+  
 
     <div class="document">
       <div class="documentwrapper">
@@ -57,7 +48,7 @@
   <span class="target" id="module-pyroute2.netns"></span><div class="section" id="netns-management-overview">
 <h1>Netns management overview<a class="headerlink" href="#netns-management-overview" title="Permalink to this headline">¶</a></h1>
 <p>Pyroute2 provides basic namespaces management support.
-Here&#8217;s a quick overview of typical netns tasks and
+Here’s a quick overview of typical netns tasks and
 related pyroute2 tools.</p>
 <div class="section" id="move-an-interface-to-a-namespace">
 <h2>Move an interface to a namespace<a class="headerlink" href="#move-an-interface-to-a-namespace" title="Permalink to this headline">¶</a></h2>
@@ -71,7 +62,7 @@ FD number, but a netns name as a string. In that case
 the library will try to lookup the corresponding netns
 in the standard location.</p>
 <p>Create veth and move the peer to a netns with IPRoute:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
 <span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
 <span class="n">ipr</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="s1">&#39;add&#39;</span><span class="p">,</span> <span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p0&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;veth&#39;</span><span class="p">,</span> <span class="n">peer</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)</span>
 <span class="n">idx</span> <span class="o">=</span> <span class="n">ipr</span><span class="o">.</span><span class="n">link_lookup</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
@@ -79,7 +70,7 @@ in the standard location.</p>
 </pre></div>
 </div>
 <p>Create veth and move the peer to a netns with IPDB:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
 <span class="n">ipdb</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">()</span>
 <span class="n">ipdb</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">ifname</span><span class="o">=</span><span class="s1">&#39;v0p0&#39;</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;veth&#39;</span><span class="p">,</span> <span class="n">peer</span><span class="o">=</span><span class="s1">&#39;v0p1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">ipdb</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">v0p1</span> <span class="k">as</span> <span class="n">i</span><span class="p">:</span>
@@ -92,14 +83,14 @@ in the standard location.</p>
 <p>This task can be done with <cite>NetNS</cite> objects. A <cite>NetNS</cite> object
 spawns a child and runs it within a netns, providing the same
 API as <cite>IPRoute</cite> does:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
 <span class="n">ns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;netns_name&#39;</span><span class="p">)</span>
 <span class="c1"># do some stuff within the netns</span>
 <span class="n">ns</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
 </div>
 <p>One can even start <cite>IPDB</cite> on the top of <cite>NetNS</cite>:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
 <span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
 <span class="n">ipdb</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">nl</span><span class="o">=</span><span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;netns_name&#39;</span><span class="p">))</span>
 <span class="c1"># do some stuff within the netns</span>
@@ -116,7 +107,7 @@ as normal <cite>Popen</cite>, but starts a process within a netns.</p>
 <h2>List, set, create and remove netns<a class="headerlink" href="#list-set-create-and-remove-netns" title="Permalink to this headline">¶</a></h2>
 <p>These functions are described below. To use them, import
 <cite>netns</cite> module:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">netns</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">netns</span>
 <span class="n">netns</span><span class="o">.</span><span class="n">listnetns</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -151,10 +142,12 @@ SELinux state with <cite>getenforce</cite> command.</p>
 call:</p>
 <blockquote>
 <div><ul class="simple">
-<li>O_CREAT &#8211; create netns, if doesn&#8217;t exist</li>
-<li>O_CREAT | O_EXCL &#8211; create only if doesn&#8217;t exist</li>
+<li>O_CREAT – create netns, if doesn’t exist</li>
+<li>O_CREAT | O_EXCL – create only if doesn’t exist</li>
 </ul>
 </div></blockquote>
+<p>Changed in 0.5.1: the routine closes the ns fd if it’s
+not provided via arguments.</p>
 </dd></dl>
 
 </div>
@@ -167,7 +160,7 @@ the required netns. All the netlink requests are done via
 that proxy process.</p>
 <p>NetNS supports standard IPRoute API, so can be used instead
 of IPRoute, e.g., in IPDB:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># start the main network settings database:</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># start the main network settings database:</span>
 <span class="n">ipdb_main</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">()</span>
 <span class="c1"># start the same for a netns:</span>
 <span class="n">ipdb_test</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">nl</span><span class="o">=</span><span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">))</span>
@@ -196,11 +189,11 @@ of IPRoute, e.g., in IPDB:</p>
 </div>
 <p>Please review also the test code, under <cite>tests/test_netns.py</cite> for
 more examples.</p>
-<p>By default, NetNS creates requested netns, if it doesn&#8217;t exist,
+<p>By default, NetNS creates requested netns, if it doesn’t exist,
 or uses existing one. To control this behaviour, one can use flags
 as for <cite>open(2)</cite> system call:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="c1"># create a new netns or fail, if it already exists</span>
-<span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">O_CREAT</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">O_EXIST</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new netns or fail, if it already exists</span>
+<span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">O_CREAT</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">O_EXCL</span><span class="p">)</span>
 
 <span class="c1"># create a new netns or use existing one</span>
 <span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">O_CREAT</span><span class="p">)</span>
@@ -210,7 +203,7 @@ as for <cite>open(2)</cite> system call:</p>
 </pre></div>
 </div>
 <p>To remove a network namespace:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
 <span class="n">netns</span> <span class="o">=</span> <span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;test&#39;</span><span class="p">)</span>
 <span class="n">netns</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <span class="n">netns</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
@@ -237,7 +230,7 @@ poll/select as well.</p>
 is <strong>mandatory</strong> to close the socket before exit.</p>
 <p><strong>NetNS and IPDB</strong></p>
 <p>It is possible to run IPDB with NetNS:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NetNS</span>
 <span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPDB</span>
 
 <span class="n">ip</span> <span class="o">=</span> <span class="n">IPDB</span><span class="p">(</span><span class="n">nl</span><span class="o">=</span><span class="n">NetNS</span><span class="p">(</span><span class="s1">&#39;somenetns&#39;</span><span class="p">))</span>
@@ -255,46 +248,6 @@ down <cite>NetNS</cite> instance as well.</p>
 
 </dd></dl>
 
-<dl class="function">
-<dt id="pyroute2.netns.nslink.NetNServer">
-<code class="descclassname">pyroute2.netns.nslink.</code><code class="descname">NetNServer</code><span class="sig-paren">(</span><em>netns</em>, <em>cmdch</em>, <em>brdch</em>, <em>flags=64</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.nslink.NetNServer" title="Permalink to this definition">¶</a></dt>
-<dd><p>The netns server supposed to be started automatically by NetNS.
-It has two communication channels: one simplex to forward incoming
-netlink packets, <cite>rcvch</cite>, and other synchronous duplex to get
-commands and send back responses, <cite>cmdch</cite>.</p>
-<p>Channels should support standard socket API, should be compatible
-with poll/select and should be able to transparently pickle objects.
-NetNS uses <cite>multiprocessing.Pipe</cite> for this purpose, but it can be
-any other implementation with compatible API.</p>
-<p>The first parameter, <cite>netns</cite>, is a netns name. Depending on the
-<cite>flags</cite>, the netns can be created automatically. The <cite>flags</cite> semantics
-is exactly the same as for <cite>open(2)</cite> system call.</p>
-<p>...</p>
-<p>The server workflow is simple. The startup sequence:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>1. Create or open a netns.
-
-2. Start `IPRoute` instance. It will be used only on the low level,
-   the `IPRoute` will not parse any packet.
-
-3. Start poll/select loop on `cmdch` and `IPRoute`.
-</pre></div>
-</div>
-<p>On the startup, the server sends via <cite>cmdch</cite> the status packet. It can be
-<cite>None</cite> if all is OK, or some exception.</p>
-<p>Further data handling, depending on the channel, server side:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>1. `IPRoute`: read an incoming netlink packet and send it unmodified
-   to the peer via `rcvch`. The peer, polling `rcvch`, can handle
-   the packet on its side.
-
-2. `cmdch`: read tuple (cmd, argv, kwarg). If the `cmd` starts with
-   &quot;send&quot;, then take `argv[0]` as a packet buffer, treat it as one
-   netlink packet and substitute PID field (offset 12, uint32) with
-   its own. Strictly speaking, it is not mandatory for modern netlink
-   implementations, but it is required by the protocol standard.
-</pre></div>
-</div>
-</dd></dl>
-
 </div>
 <span class="target" id="module-pyroute2.netns.process.proxy"></span><div class="section" id="nspopen">
 <h1>NSPopen<a class="headerlink" href="#nspopen" title="Permalink to this headline">¶</a></h1>
@@ -306,7 +259,7 @@ namespace support.</p>
 <em class="property">class </em><code class="descclassname">pyroute2.netns.process.proxy.</code><code class="descname">NSPopen</code><span class="sig-paren">(</span><em>nsname</em>, <em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.netns.process.proxy.NSPopen" title="Permalink to this definition">¶</a></dt>
 <dd><p>A proxy class to run <cite>Popen()</cite> object in some network namespace.</p>
 <p>Sample to run <cite>ip ad</cite> command in <cite>nsname</cite> network namespace:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">nsp</span> <span class="o">=</span> <span class="n">NSPopen</span><span class="p">(</span><span class="s1">&#39;nsname&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">,</span> <span class="s1">&#39;ad&#39;</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">nsp</span> <span class="o">=</span> <span class="n">NSPopen</span><span class="p">(</span><span class="s1">&#39;nsname&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;ip&#39;</span><span class="p">,</span> <span class="s1">&#39;ad&#39;</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">subprocess</span><span class="o">.</span><span class="n">PIPE</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">nsp</span><span class="o">.</span><span class="n">communicate</span><span class="p">())</span>
 <span class="n">nsp</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
 <span class="n">nsp</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
@@ -321,13 +274,13 @@ process specified as the argument of the <cite>NSPopen</cite> will be
 started in its turn from this child. Thus all the fd numbers
 of the running <cite>NSPopen</cite> object are meaningless in the context
 of the main process. Trying to operate on them, one will get
-&#8216;Bad file descriptor&#8217; in the best case or a system call working
+‘Bad file descriptor’ in the best case or a system call working
 on a wrong file descriptor in the worst case. A possible
 solution would be to transfer file descriptors between the
 <cite>NSPopen</cite> object and the main process, but it is not implemented
 yet.</p>
-<p>The process&#8217; diagram for <cite>NSPopen(&#8216;test&#8217;, [&#8216;ip&#8217;, &#8216;ad&#8217;])</cite>:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>+---------------------+     +--------------+     +------------+
+<p>The process’ diagram for <cite>NSPopen(‘test’, [‘ip’, ‘ad’])</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>+---------------------+     +--------------+     +------------+
 | main python process |&lt;---&gt;| child python |&lt;---&gt;| netns test |
 | NSPopen()           |     | Popen()      |     | $ ip ad    |
 +---------------------+     +--------------+     +------------+
@@ -336,7 +289,7 @@ yet.</p>
 <p>As a workaround for the issue with file descriptors, some
 additional methods are available on file objects <cite>stdin</cite>,
 <cite>stdout</cite> and <cite>stderr</cite>. E.g., one can run fcntl calls:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">fcntl</span> <span class="k">import</span> <span class="n">F_GETFL</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">fcntl</span> <span class="k">import</span> <span class="n">F_GETFL</span>
 <span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">NSPopen</span>
 <span class="kn">from</span> <span class="nn">subprocess</span> <span class="k">import</span> <span class="n">PIPE</span>
 
@@ -380,26 +333,28 @@ the <cite>release()</cite> call.</p>
 </ul>
 
   <h4>Previous topic</h4>
-  <p class="topless"><a href="ipdb.html"
-                        title="previous chapter">IPDB module</a></p>
+  <p class="topless"><a href="ipset.html"
+                        title="previous chapter">IPSet module</a></p>
   <h4>Next topic</h4>
   <p class="topless"><a href="mpls.html"
                         title="next chapter">MPLS howto</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
-      <li><a href="_sources/netns.txt"
+      <li><a href="_sources/netns.rst.txt"
             rel="nofollow">Show Source</a></li>
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
+    <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <div><input type="text" name="q" /></div>
-      <div><input type="submit" value="Go" /></div>
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
       <input type="hidden" name="check_keywords" value="yes" />
       <input type="hidden" name="area" value="default" />
     </form>
+    </div>
 </div>
 <script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
@@ -419,14 +374,15 @@ the <cite>release()</cite> call.</p>
           <a href="mpls.html" title="MPLS howto"
              >next</a> |</li>
         <li class="right" >
-          <a href="ipdb.html" title="IPDB module"
+          <a href="ipset.html" title="IPSet module"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2013, Peter V. Saveliev.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.7.2.
     </div>
   </body>
 </html>

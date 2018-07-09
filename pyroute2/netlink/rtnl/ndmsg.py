@@ -64,7 +64,11 @@ class ndmsg(nlmsg):
             __u32         ndm_refcnt;
         };
     '''
+
+    __slots__ = ()
+
     prefix = 'NDA_'
+    sql_constraints = {'NDA_LLADDR': 'NOT NULL DEFAULT ""'}
 
     fields = (('family', 'B'),
               ('__pad', '3x'),
@@ -95,6 +99,9 @@ class ndmsg(nlmsg):
                ('NDA_MASTER', 'uint32'))
 
     class cacheinfo(nla):
+
+        __slots__ = ()
+
         fields = (('ndm_confirmed', 'I'),
                   ('ndm_used', 'I'),
                   ('ndm_updated', 'I'),

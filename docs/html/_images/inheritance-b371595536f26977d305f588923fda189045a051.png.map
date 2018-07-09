@@ -1,0 +1,15 @@
+<map id="inheritancec409297746" name="inheritancec409297746">
+<area shape="rect" id="node1" href="nlsocket.html#pyroute2.netlink.nlsocket.BatchSocket" target="_top" title="BatchSocket" alt="" coords="176,18,276,43"/>
+<area shape="rect" id="node2" href="nlsocket.html#pyroute2.netlink.nlsocket.NetlinkMixin" target="_top" title="Generic netlink socket" alt="" coords="5,149,106,174"/>
+<area shape="rect" id="node5" href="nlsocket.html#pyroute2.netlink.nlsocket.NetlinkSocket" target="_top" title="NetlinkSocket" alt="" coords="171,149,281,174"/>
+<area shape="rect" id="node4" title="Low&#45;level socket interface. Provides all the" alt="" coords="346,53,504,78"/>
+<area shape="rect" id="node10" title="Low&#45;level socket interface. Provides all the" alt="" coords="382,245,468,269"/>
+<area shape="rect" id="node11" title="The simplest class, that connects together the netlink parser and" alt="" coords="383,101,467,126"/>
+<area shape="rect" id="node13" href="ipset.html#pyroute2.ipset.IPSet" target="_top" title="NFNetlink socket (family=NETLINK_NETFILTER)." alt="" coords="390,149,460,174"/>
+<area shape="rect" id="node6" href="iproute.html#pyroute2.iproute.linux.IPBatch" target="_top" title="Netlink requests compiler. Does not send any requests, but" alt="" coords="563,5,633,30"/>
+<area shape="rect" id="node7" href="iproute.html#pyroute2.iproute.linux.RTNL_API" target="_top" title="`RTNL_API` should not be instantiated by itself. It is intended" alt="" coords="385,197,465,221"/>
+<area shape="rect" id="node12" href="iproute.html#pyroute2.iproute.linux.IPRoute" target="_top" title="Regular ordinary utility class, see RTNL API for the list of methods." alt="" coords="563,152,633,176"/>
+<area shape="rect" id="node16" href="netns.html#pyroute2.netns.nslink.NetNS" target="_top" title="NetNS is the IPRoute API with network namespace support." alt="" coords="563,337,633,361"/>
+<area shape="rect" id="node20" href="iproute.html#pyroute2.iproute.linux.RawIPRoute" target="_top" title="The same as `IPRoute`, but does not use the netlink proxy." alt="" coords="550,206,646,231"/>
+<area shape="rect" id="node14" href="devmodules.html#pyroute2.iwutil.IW" target="_top" title="IW" alt="" coords="693,101,763,126"/>
+</map>
