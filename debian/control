@@ -29,7 +29,7 @@ Description: Python Netlink library
  Later it can change, but the deps tree will remain as simple, as
  it is possible.
  .
- This is the Python 2 compatible package. 
+ This is the Python 2 compatible package.
 
 Package: python3-pyroute2
 Architecture: all
