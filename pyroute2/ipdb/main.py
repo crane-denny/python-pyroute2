@@ -16,10 +16,10 @@ IPDB vs. IPRoute
 ----------------
 
 These two modules, IPRoute and IPDB, use completely different
-approaches. The first one, IPRoute, just forward requests to
+approaches. The first one, IPRoute, just forwards requests to
 the kernel, and doesn't wait for the system state. So it's up
 to developer to check, whether the requested object is really
-set up, or not yet.
+set up or not.
 
 The latter, IPDB, is an asynchronously updated database, that
 starts several additional threads by default. If your
@@ -63,6 +63,58 @@ records or removing them by one.
 So, IPRoute is much simpler when you need to make a call and
 then exit, while IPDB is cheaper in terms of CPU performance
 if you implement a long-running program like a daemon.
+
+IPDB and other software
+-----------------------
+
+IPDB is designed to be a non-exclusive network settings database.
+There may be several IPDB instances on the same OS, as well as
+other network management software, such as NetworkManager etc.
+
+The IPDB transactions should not interfere with other software
+settings, unless they touch the same objects. E.g., if IPDB
+brings an interface up, while NM shuts it down, there will be
+a race condition.
+
+An example::
+
+    # IPDB code                       #  NetworkManager at the same time:
+    ipdb.interfaces['eth0'].up()      #
+    ipdb.interfaces['eth0'].commit()  #  $ sudo nmcli con down eth0
+    # ---> <---
+    # The eth0 state here is undefined. Some of the commands
+    # above will fail
+
+But as long as the software doesn't touch the same objects, there
+will be no conflicts. Another example::
+
+    # IPDB code                         # At the same time, NetworkManager
+    with ipdb.interfaces['eth0'] as i:  # adds addresses:
+        i.add_ip('172.16.254.2/24')     #  * 10.0.0.2/24
+        i.add_ip('172.16.254.3/24')     #  * 10.0.0.3/24
+    # ---> <---
+    # At this point the eth0 interface will have all four addresses.
+    # If the IPDB transaction fails by some reason, only IPDB addresses
+    # will be rolled back.
+
+There may be a need to prevent other software from changing the network
+settings. There is no locking at the kernel level, but IPDB can revert
+all the changes as soon as they appear on the interface::
+
+    # IPDB code
+    ipdb.interfaces['eth0'].freeze()
+                                       # Here some other software tries to
+                                       # add an address, or to remove the old
+                                       # one
+    # ---> <---
+    # At this point the eth0 interface will have all the same settings as
+    # at the `freeze()` call moment. Newly added addresses will be removed,
+    # all the deleted addresses will be restored.
+    #
+    # Please notice, that an address removal may cause also a routes removal,
+    # and that is the thing that IPDB can not neither prevent, nor revert.
+
+    ipdb.interfaces['eth0'].unfreeze()
 
 Quickstart
 ----------
@@ -172,6 +224,23 @@ managers in the same way as IPDB does itself::
 On exit, the context manager will authomatically `commit()`
 the transaction.
 
+Read-only interface views
+-------------------------
+
+Using an interface as a context manager **will** start a
+transaction. Sometimes it is not what one needs. To avoid
+unnecessary transactions, and to avoid the risk to occasionally
+change interface attributes, one can use read-only views::
+
+    with ipdb.interfaces[1].ro as iface:
+        print(iface.ifname)
+        print(iface.address)
+
+The `.ro` view neither starts transactions, nor allows to
+change anything, raising the `RuntimeError` exception.
+
+The same read-only views are available for routes and rules.
+
 Create interfaces
 -----------------
 
@@ -187,6 +256,73 @@ The `IPDB.create()` call has the same syntax as
 `IPRoute.link('add', ...)`, except you shouldn't specify
 the `'add'` command. Refer to `IPRoute` docs for details.
 
+Please notice, that the interface object stays in the database
+even if there was an error during the interface creation. It is
+done so to make it possible to fix the interface object and try
+to run `commit()` again. Or you can drop the interface object
+with the `.remove().commit()` call.
+
+IP address management
+---------------------
+
+IP addresses on interfaces may be managed using `add_ip()` and
+`del_ip()`::
+
+    with ipdb.interfaces['eth0'] as eth:
+        eth.add_ip('10.0.0.1/24')
+        eth.add_ip('10.0.0.2/24')
+        eth.add_ip('2001:4c8:1023:108::39/64')
+        eth.del_ip('172.16.12.5/24')
+
+The address format may be either a string with `'address/mask'`
+notation, or a pair of `'address', mask`::
+
+    with ipdb.interfaces['eth0'] as eth:
+        eth.add_ip('10.0.0.1', 24)
+        eth.del_ip('172.16.12.5', 24)
+
+The `ipaddr` attribute contains all the IP addresses of the
+interface, which are acessible in different ways. Getting an
+iterator from `ipaddr` gives you a sequence of tuples
+`('address', mask)`::
+
+    >>> for addr in ipdb.interfaces['eth0'].ipaddr:
+    ...    print(ipaddr)
+    ...
+    ('10.0.0.2', 24)
+    ('10.0.0.1', 24)
+
+Getting one IP from `ipaddr` returns a dict object with full spec:
+
+    >>> ipdb.interfaces['eth0'].ipaddr[0]:
+        {'family': 2,
+         'broadcast': None,
+         'flags': 128,
+         'address': '10.0.0.2',
+         'prefixlen': 24,
+         'local': '10.0.0.2'}
+
+    >>> ipdb.intefaces['eth0'].ipaddr['10.0.0.2/24']:
+        {'family': 2,
+         'broadcast': None,
+         'flags': 128,
+         'address': '10.0.0.2',
+         'prefixlen': 24,
+         'local': '10.0.0.2'}
+
+The API is a bit weird, but it's because of historical reasons. In
+the future it may be changed.
+
+Another feature of the `ipaddr` attribute is views::
+
+    >>> ipdb.interfaces['eth0'].ipaddr.ipv4:
+        (('10.0.0.2', 24), ('10.0.0.1', 24))
+    >>> ipdb.interfaces['eth0'].ipaddr.ipv6:
+        (('2001:4c8:1023:108::39', 64),)
+
+The views, as well as the `ipaddr` attribute itself are not supposed
+to be changed by user, but only by the internal API.
+
 Bridge interfaces
 -----------------
 
@@ -197,10 +333,21 @@ time etc. Names of these properties start with `br_`, like
 
     [x for x in dir(ipdb.interfaces.virbr0) if x.startswith('br_')]
 
+Bridge ports
+------------
+
+IPDB supports specific bridge port parameters, such as proxyarp,
+unicast/multicast flood, cost etc.::
+
+    with ipdb.interfaces['br-port0'] as p:
+        p.brport_cost = 200
+        p.brport_unicast_flood = 0
+        p.brport_proxyarp = 0
+
 Ports management
 ----------------
 
-IPDB provides a uniform API to manage ports::
+IPDB provides a uniform API to manage bridge, bond and vrf ports::
 
     with ipdb.interfaces['br-int'] as br:
         br.add_port('veth0')
@@ -213,8 +360,6 @@ Both `add_port()` and `del_port()` accept three types of arguments:
     * `'veth0'` -- interface name as a string
     * `ipdb.interfaces.veth1` -- IPDB interface object
     * `700` -- interface index, an integer
-
-The same methods are used to manage bridge, bond and vrf ports.
 
 Routes management
 -----------------
@@ -246,6 +391,19 @@ Please notice, that the device can be specified with `oif`
 (output interface) or `iif` (input interface), the `device`
 keyword is not supported anymore.
 
+More examples::
+
+    # specify table and priority
+    (ipdb.routes
+     .add(dst='172.16.1.0/24',
+          gateway='192.168.0.1',
+          table=100,
+          priority=10)
+     .commit())
+
+The `priority` field is what the `iproute2` utility calls
+`metric` -- see also below.
+
 Get a route
 ~~~~~~~~~~~
 
@@ -261,7 +419,7 @@ follows::
         route.metrics.mtu = 1500
 
     # access the default route
-    print(ipdb.routes['default])
+    print(ipdb.routes['default'])
 
     # change the default gateway
     with ipdb.routes['default'] as route:
@@ -283,9 +441,11 @@ of 'prefix/mask' string and the route priority (if any)::
 
     In [1]: ipdb.routes.tables[254].idx.keys()
     Out[1]:
-    [RouteKey(dst='default', priority=600),
-     RouteKey(dst='10.1.0.0/24', priority=600),
-     RouteKey(dst='192.168.122.0/24', priority=None)]
+    [RouteKey(dst='default', table=254, family=2, ...),
+     RouteKey(dst='172.17.0.0/16', table=254, ...),
+     RouteKey(dst='172.16.254.0/24', table=254, ...),
+     RouteKey(dst='192.168.122.0/24', table=254, ...),
+     RouteKey(dst='fe80::/64', table=254, family=10, ...)]
 
 But a routing table in IPDB allows several variants of the
 route spec. The simplest case is to retrieve a route by
@@ -309,8 +469,23 @@ records and filter by a key to retrieve all matches::
 
 It is also possible to use dicts as specs::
 
-    ipdb.routes[{'dst': '172.16.0.0/16',
-                 'oif': 2}]
+    # get IPv4 default route
+    ipdb.routes[{'dst': 'default', 'family': AF_INET}]
+
+    # get IPv6 default route
+    ipdb.routes[{'dst': 'default', 'family': AF_INET6}]
+
+    # get route by priority
+    ipdb.routes.table[100][{'dst': '10.0.0.0/24', 'priority': 10}]
+
+While this notation returns one route, there is a method to get
+all the routes matching the spec::
+
+    # get all the routes from all the tables via some interface
+    ipdb.routes.filter({'oif': idx})
+
+    # get all IPv6 routes from some table
+    ipdb.routes.table[tnum].filter({'family': AF_INET6})
 
 Route metrics
 ~~~~~~~~~~~~~
@@ -523,21 +698,34 @@ after some delay.
 The class API
 -------------
 '''
+import sys
 import atexit
 import logging
 import traceback
 import threading
+import weakref
+try:
+    import queue
+except ImportError:
+    import Queue as queue  # The module is called 'Queue' in Python2
 
+from functools import partial
+from pprint import pprint
 from pyroute2 import config
 from pyroute2.common import uuid32
+from pyroute2.common import basestring
 from pyroute2.iproute import IPRoute
-from pyroute2.netlink.rtnl import RTM_GETLINK, RTNL_GROUPS
+from pyroute2.netlink.rtnl import RTM_GETLINK, RTMGRP_DEFAULTS
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
-from pyroute2.ipdb import rule
-from pyroute2.ipdb import route
-from pyroute2.ipdb import interface
-from pyroute2.ipdb.linkedset import IPaddrSet, SortedIPaddrSet
+from pyroute2.ipdb import rules
+from pyroute2.ipdb import routes
+from pyroute2.ipdb import interfaces
+from pyroute2.ipdb.routes import BaseRoute
+from pyroute2.ipdb.exceptions import ShutdownException
 from pyroute2.ipdb.transactional import SYNC_TIMEOUT
+from pyroute2.ipdb.linkedset import IPaddrSet
+from pyroute2.ipdb.linkedset import SortedIPaddrSet
+from pyroute2.ipdb.utils import test_reachable_icmp
 
 log = logging.getLogger(__name__)
 
@@ -572,6 +760,49 @@ class Watchdog(object):
         self.ipdb.unregister_callback(self.uuid)
 
 
+class _evq_context(object):
+    '''
+    Context manager class for the event queue used by the event loop
+    '''
+    def __init__(self, ipdb, qsize, block, timeout):
+        self._ipdb = ipdb
+        self._qsize = qsize
+        self._block = block
+        self._timeout = timeout
+
+    def __enter__(self):
+        # Context manager protocol
+        self._ipdb._evq_lock.acquire()
+        self._ipdb._evq = queue.Queue(maxsize=self._qsize)
+        self._ipdb._evq_drop = 0
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Context manager protocol
+        self._ipdb._evq = None
+        self._ipdb._evq_drop = 0
+        self._ipdb._evq_lock.release()
+
+    def __iter__(self):
+        # Iterator protocol
+        if not self._ipdb._evq:
+            raise RuntimeError('eventqueue must be used '
+                               'as a context manager')
+        return self
+
+    def next(self):
+        # Iterator protocol -- Python 2.x compatibility
+        return self.__next__()
+
+    def __next__(self):
+        # Iterator protocol -- Python 3.x
+        msg = self._ipdb._evq.get(self._block, self._timeout)
+        self._ipdb._evq.task_done()
+        if isinstance(msg, Exception):
+            raise msg
+        return msg
+
+
 class IPDB(object):
     '''
     The class that maintains information about network setup
@@ -581,21 +812,31 @@ class IPDB(object):
 
     def __init__(self, nl=None, mode='implicit',
                  restart_on_error=None, nl_async=None,
-                 nl_bind_groups=RTNL_GROUPS,
+                 sndbuf=1048576, rcvbuf=1048576,
+                 nl_bind_groups=RTMGRP_DEFAULTS,
                  ignore_rtables=None, callbacks=None,
-                 sort_addresses=False):
+                 sort_addresses=False, plugins=None):
+        plugins = plugins or ['interfaces', 'routes', 'rules']
+        pmap = {'interfaces': interfaces,
+                'routes': routes,
+                'rules': rules}
         self.mode = mode
-        self.sort_addresses = sort_addresses
+        self.txdrop = False
+        self._stdout = sys.stdout
+        self._ipaddr_set = SortedIPaddrSet if sort_addresses else IPaddrSet
         self._event_map = {}
         self._deferred = {}
+        self._ensure = []
         self._loaded = set()
         self._mthread = None
         self._nl_own = nl is None
         self._nl_async = config.ipdb_nl_async if nl_async is None else True
         self.mnl = None
         self.nl = nl
+        self._sndbuf = sndbuf
+        self._rcvbuf = rcvbuf
         self.nl_bind_groups = nl_bind_groups
-        self._plugins = [interface, route, rule]
+        self._plugins = [pmap[x] for x in plugins if x in pmap]
         if isinstance(ignore_rtables, int):
             self._ignore_rtables = [ignore_rtables, ]
         elif isinstance(ignore_rtables, (list, tuple, set)):
@@ -606,7 +847,15 @@ class IPDB(object):
         # see also 'register_callback'
         self._post_callbacks = {}
         self._pre_callbacks = {}
-        self._cb_threads = {}
+
+        # local event queues
+        # - callbacks event queue
+        self._cbq = queue.Queue(maxsize=8192)
+        self._cbq_drop = 0
+        # - users event queue
+        self._evq = None
+        self._evq_lock = threading.Lock()
+        self._evq_drop = 0
 
         # locks and events
         self.exclusive = threading.RLock()
@@ -637,8 +886,19 @@ class IPDB(object):
         # init the database
         self.initdb()
 
-        #
-        atexit.register(self.release)
+        # init the dir() cache
+        self.__dir_cache__ = [i for i in self.__class__.__dict__.keys()
+                              if i[0] != '_']
+        self.__dir_cache__.extend(list(self._deferred.keys()))
+
+        def cleanup(ref):
+            ipdb_obj = ref()
+            if ipdb_obj is not None:
+                ipdb_obj.release()
+        atexit.register(cleanup, weakref.ref(self))
+
+    def __dir__(self):
+        return self.__dir_cache__
 
     def __enter__(self):
         return self
@@ -646,46 +906,87 @@ class IPDB(object):
     def __exit__(self, exc_type, exc_value, traceback):
         self.release()
 
+    def _flush_db(self):
+
+        def flush(idx):
+            for key in tuple(idx.keys()):
+                try:
+                    del idx[key]
+                except KeyError:
+                    pass
+        idx_list = []
+        if 'interfaces' in self._loaded:
+            for (key, dev) in self.by_name.items():
+                try:
+                    # FIXME
+                    self.interfaces._detach(key,
+                                            dev['index'],
+                                            dev.nlmsg)
+                except KeyError:
+                    pass
+            idx_list.append(self.ipaddr)
+            idx_list.append(self.neighbours)
+        if 'routes' in self._loaded:
+            idx_list.extend([self.routes.tables[x] for x
+                             in self.routes.tables.keys()])
+        if 'rules' in self._loaded:
+            idx_list.append(self.rules)
+        for idx in idx_list:
+            flush(idx)
+
     def initdb(self):
-        # common event map, empty by default, so all the
-        # events aer just ignored
-        self.release(complete=False)
-        self._stop = False
-        # explicitly cleanup object references
-        for event in tuple(self._event_map):
-            del self._event_map[event]
 
-        # if the command socket is not provided, create it
-        if self._nl_own:
-            self.nl = IPRoute()
-        # setup monitoring socket
-        self.mnl = self.nl.clone()
-        try:
-            self.mnl.bind(groups=self.nl_bind_groups, async=self._nl_async)
-        except:
-            self.mnl.close()
-            if self._nl_own is None:
-                self.nl.close()
-            raise
+        # flush all the DB objects
+        with self.exclusive:
 
-        # explicitly cleanup references
-        for key in tuple(self._deferred):
-            del self._deferred[key]
+            # explicitly cleanup object references
+            for event in tuple(self._event_map):
+                del self._event_map[event]
 
-        for module in self._plugins:
-            if (module.groups & self.nl_bind_groups) != module.groups:
-                continue
-            for plugin in module.spec:
-                self._deferred[plugin['name']] = module.spec
-                if plugin['name'] in self._loaded:
-                    delattr(self, plugin['name'])
-                    self._loaded.remove(plugin['name'])
+            self._flush_db()
 
-        # start the monitoring thread
-        self._mthread = threading.Thread(name="IPDB event loop",
-                                         target=self.serve_forever)
-        self._mthread.setDaemon(True)
-        self._mthread.start()
+            # if the command socket is not provided, create it
+            if self._nl_own:
+                if self.nl is not None:
+                    self.nl.close()
+                self.nl = IPRoute(sndbuf=self._sndbuf, rcvbuf=self._rcvbuf)
+            # setup monitoring socket
+            if self.mnl is not None:
+                self._flush_mnl()
+                self.mnl.close()
+            self.mnl = self.nl.clone()
+            try:
+                self.mnl.bind(groups=self.nl_bind_groups,
+                              async_cache=self._nl_async)
+            except:
+                self.mnl.close()
+                if self._nl_own is None:
+                    self.nl.close()
+                raise
+
+            # explicitly cleanup references
+            for key in tuple(self._deferred):
+                del self._deferred[key]
+
+            for module in self._plugins:
+                if (module.groups & self.nl_bind_groups) != module.groups:
+                    continue
+                for plugin in module.spec:
+                    self._deferred[plugin['name']] = module.spec
+                    if plugin['name'] in self._loaded:
+                        delattr(self, plugin['name'])
+                        self._loaded.remove(plugin['name'])
+
+            # start service threads
+            for tspec in (('_mthread', '_serve_main', 'IPDB main event loop'),
+                          ('_cthread', '_serve_cb', 'IPDB cb event loop')):
+                tg = getattr(self, tspec[0], None)
+                if not getattr(tg, 'is_alive', lambda: False)():
+                    tx = threading.Thread(name=tspec[2],
+                                          target=getattr(self, tspec[1]))
+                    setattr(self, tspec[0], tx)
+                    tx.setDaemon(True)
+                    tx.start()
 
     def __getattribute__(self, name):
         deferred = super(IPDB, self).__getattribute__('_deferred')
@@ -778,6 +1079,8 @@ class IPDB(object):
             self._post_callbacks[safe.uuid] = safe
         elif mode == 'pre':
             self._pre_callbacks[safe.uuid] = safe
+        else:
+            raise KeyError('Unknown callback mode')
         return safe.uuid
 
     def unregister_callback(self, cuid, mode='post'):
@@ -789,13 +1092,36 @@ class IPDB(object):
             raise KeyError('Unknown callback mode')
         safe = cbchain[cuid]
         with safe.lock:
-            cbchain.pop(cuid)
-        for t in tuple(self._cb_threads.get(cuid, ())):
-            t.join(3)
-        ret = self._cb_threads.get(cuid, ())
+            ret = cbchain.pop(cuid)
         return ret
 
-    def release(self, complete=True):
+    def eventqueue(self, qsize=8192, block=True, timeout=None):
+        '''
+        Initializes event queue and returns event queue context manager.
+        Once the context manager is initialized, events start to be collected,
+        so it is possible to read initial state from the system witout losing
+        last moment changes, and once that is done, start processing events.
+
+        Example:
+
+            ipdb = IPDB()
+            with ipdb.eventqueue() as evq:
+                my_state = ipdb.<needed_attribute>...
+                for msg in evq:
+                    update_state_by_msg(my_state, msg)
+        '''
+        return _evq_context(self, qsize, block, timeout)
+
+    def eventloop(self, qsize=8192, block=True, timeout=None):
+        """
+        Event generator for simple cases when there is no need for initial
+        state setup. Initialize event queue and yield events as they happen.
+        """
+        with self.eventqueue(qsize=qsize, block=block, timeout=timeout) as evq:
+            for msg in evq:
+                yield msg
+
+    def release(self):
         '''
         Shutdown IPDB instance and sync the state. Since
         IPDB is asyncronous, some operations continue in the
@@ -809,70 +1135,135 @@ class IPDB(object):
         '''
         with self._shutdown_lock:
             if self._stop:
+                log.warning("shutdown in progress")
                 return
             self._stop = True
-            if self.mnl is not None:
-                # terminate the main loop
-                for t in range(3):
-                    try:
-                        msg = ifinfmsg()
-                        msg['index'] = 1
-                        msg.reset()
-                        self.mnl.put(msg, RTM_GETLINK)
-                    except Exception as e:
-                        logging.warning("shutdown error: %s", e)
-                        # Just give up.
-                        # We can not handle this case
+            self._cbq.put(ShutdownException("shutdown"))
 
             if self._mthread is not None:
+                self._flush_mnl()
                 self._mthread.join()
 
             if self.mnl is not None:
                 self.mnl.close()
                 self.mnl = None
-                if complete or self._nl_own:
-                    self.nl.close()
-                    self.nl = None
 
-        with self.exclusive:
-                # collect all the callbacks
-                for cuid in tuple(self._cb_threads):
-                    for t in tuple(self._cb_threads[cuid]):
-                        t.join()
+            if self._nl_own:
+                self.nl.close()
+                self.nl = None
 
-                # flush all the objects
-                def flush(idx):
-                    for key in tuple(idx.keys()):
-                        try:
-                            del idx[key]
-                        except KeyError:
-                            pass
-                idx_list = []
+            self._flush_db()
 
-                if 'interfaces' in self._loaded:
-                    for (key, dev) in self.by_name.items():
-                        try:
-                            # FIXME
-                            self.interfaces._detach(key,
-                                                    dev['index'],
-                                                    dev.nlmsg)
-                        except KeyError:
-                            pass
-                    idx_list.append(self.ipaddr)
-                    idx_list.append(self.neighbours)
-
-                if 'routes' in self._loaded:
-                    idx_list.extend([self.routes.tables[x] for x
-                                     in self.routes.tables.keys()])
-
-                if 'rules' in self._loaded:
-                    idx_list.append(self.rules)
-
-                for idx in idx_list:
-                    flush(idx)
+    def _flush_mnl(self):
+        if self.mnl is not None:
+            # terminate the main loop
+            for t in range(3):
+                try:
+                    msg = ifinfmsg()
+                    msg['index'] = 1
+                    msg.reset()
+                    self.mnl.put(msg, RTM_GETLINK)
+                except Exception as e:
+                    log.error("shutdown error: %s", e)
+                    # Just give up.
+                    # We can not handle this case
 
     def create(self, kind, ifname, reuse=False, **kwarg):
         return self.interfaces.add(kind, ifname, reuse, **kwarg)
+
+    def ensure(self, cmd='add', reachable=None, condition=None):
+        if cmd == 'reset':
+            self._ensure = []
+        elif cmd == 'run':
+            for f in self._ensure:
+                f()
+        elif cmd == 'add':
+            if isinstance(reachable, basestring):
+                reachable = reachable.split(':')
+                if len(reachable) == 1:
+                    f = partial(test_reachable_icmp, reachable[0])
+                else:
+                    raise NotImplementedError()
+                self._ensure.append(f)
+            else:
+                if sys.stdin.isatty():
+                    pprint(self._ensure, stream=self._stdout)
+        elif cmd == 'print':
+            pprint(self._ensure, stream=self._stdout)
+        elif cmd == 'get':
+            return self._ensure
+        else:
+            raise NotImplementedError()
+
+    def items(self):
+        # TODO: add support for filters?
+
+        # iterate interfaces
+        for ifname in getattr(self, 'by_name', {}):
+            yield (('interfaces', ifname), self.interfaces[ifname])
+
+        # iterate routes
+        for table in getattr(getattr(self, 'routes', None),
+                             'tables', {}):
+            for key, route in self.routes.tables[table].items():
+                yield (('routes', table, key), route)
+
+    def dump(self):
+        ret = {}
+        for key, obj in self.items():
+            ptr = ret
+            for step in key[:-1]:
+                if step not in ptr:
+                    ptr[step] = {}
+                ptr = ptr[step]
+            ptr[key[-1]] = obj
+        return ret
+
+    def load(self, config, ptr=None):
+        if ptr is None:
+            ptr = self
+
+        for key in config:
+            obj = getattr(ptr, key, None)
+            if obj is not None:
+                if hasattr(obj, 'load'):
+                    obj.load(config[key])
+                else:
+                    self.load(config[key], ptr=obj)
+            elif hasattr(ptr, 'add'):
+                ptr.add(**config[key])
+
+        return self
+
+    def review(self):
+        ret = {}
+        for key, obj in self.items():
+            ptr = ret
+            try:
+                rev = obj.review()
+            except TypeError:
+                continue
+
+            for step in key[:-1]:
+                if step not in ptr:
+                    ptr[step] = {}
+                ptr = ptr[step]
+            ptr[key[-1]] = rev
+
+        if not ret:
+            raise TypeError('no transaction started')
+        return ret
+
+    def drop(self):
+        ok = False
+        for key, obj in self.items():
+            try:
+                obj.drop()
+            except TypeError:
+                continue
+            ok = True
+        if not ok:
+            raise TypeError('no transaction started')
 
     def commit(self, transactions=None, phase=1):
         # what to commit: either from transactions argument, or from
@@ -880,19 +1271,63 @@ class IPDB(object):
         if transactions is None:
             # collect interface transactions
             txlist = [(x, x.current_tx) for x
-                      in self.by_name.values() if x.local_tx.values()]
+                      in getattr(self, 'by_name', {}).values()
+                      if x.local_tx.values()]
             # collect route transactions
-            for table in self.routes.tables.keys():
+            for table in getattr(getattr(self, 'routes', None),
+                                 'tables', {}).keys():
                 txlist.extend([(x, x.current_tx) for x in
                                self.routes.tables[table]
                                if x.local_tx.values()])
-            txlist = sorted(txlist,
-                            key=lambda x: x[1]['ipdb_priority'],
-                            reverse=True)
             transactions = txlist
 
         snapshots = []
         removed = []
+
+        tx_ipdb_prio = []
+        tx_main = []
+        tx_prio1 = []
+        tx_prio2 = []
+        tx_prio3 = []
+        for (target, tx) in transactions:
+            # 8<------------------------------
+            # first -- explicit priorities
+            if tx['ipdb_priority']:
+                tx_ipdb_prio.append((target, tx))
+                continue
+            # 8<------------------------------
+            # routes
+            if isinstance(target, BaseRoute):
+                tx_prio3.append((target, tx))
+                continue
+            # 8<------------------------------
+            # intefaces
+            kind = target.get('kind', None)
+            if kind in ('vlan', 'vxlan', 'gre', 'tuntap', 'vti', 'vti6',
+                        'vrf'):
+                tx_prio1.append((target, tx))
+            elif kind in ('bridge', 'bond'):
+                tx_prio2.append((target, tx))
+            else:
+                tx_main.append((target, tx))
+            # 8<------------------------------
+
+        # explicitly sorted transactions
+        tx_ipdb_prio = sorted(tx_ipdb_prio,
+                              key=lambda x: x[1]['ipdb_priority'],
+                              reverse=True)
+
+        # FIXME: this should be documented
+        #
+        # The final transactions order:
+        # 1. any txs with ipdb_priority (sorted by that field)
+        #
+        # Then come default priorities (no ipdb_priority specified):
+        # 2. all the rest
+        # 3. vlan, vxlan, gre, tuntap, vti, vrf
+        # 4. bridge, bond
+        # 5. routes
+        transactions = tx_ipdb_prio + tx_main + tx_prio1 + tx_prio2 + tx_prio3
 
         try:
             for (target, tx) in transactions:
@@ -904,13 +1339,21 @@ class IPDB(object):
                 if phase == 1:
                     s = (target, target.pick(detached=True))
                     snapshots.append(s)
+                # apply the changes, but NO rollback -- only phase 1
                 target.commit(transaction=tx,
                               commit_phase=phase,
                               commit_mask=phase)
+                # if the commit above fails, the next code
+                # branch will run rollbacks
         except Exception:
             if phase == 1:
+                # run rollbacks for ALL the collected transactions,
+                # even successful ones
                 self.fallen = transactions
-                self.commit(transactions=snapshots, phase=2)
+                txs = filter(lambda x: not ('create' ==
+                                            x[0]['ipdb_scope'] ==
+                                            x[1]['ipdb_scope']), snapshots)
+                self.commit(transactions=txs, phase=2)
             raise
         else:
             if phase == 1:
@@ -922,16 +1365,34 @@ class IPDB(object):
                 for (target, tx) in transactions:
                     target.drop(tx.uid)
 
-    def watchdog(self, action='RTM_NEWLINK', **kwarg):
-        return Watchdog(self, action, kwarg)
+        return self
 
-    def serve_forever(self):
+    def watchdog(self, wdops='RTM_NEWLINK', **kwarg):
+        return Watchdog(self, wdops, kwarg)
+
+    def _serve_cb(self):
+        ###
+        # Callbacks thread working on a dedicated event queue.
+        ###
+
+        while not self._stop:
+            msg = self._cbq.get()
+            self._cbq.task_done()
+            if isinstance(msg, ShutdownException):
+                return
+            elif isinstance(msg, Exception):
+                raise msg
+            for cb in tuple(self._post_callbacks.values()):
+                try:
+                    cb(self, msg, msg['event'])
+                except:
+                    pass
+
+    def _serve_main(self):
         ###
         # Main monitoring cycle. It gets messages from the
         # default iproute queue and updates objects in the
         # database.
-        #
-        # Should not be called manually.
         ###
 
         while not self._stop:
@@ -946,10 +1407,14 @@ class IPDB(object):
                 # anymore
                 if self._stop:
                     break
-            except:
-                log.error('Restarting IPDB instance after '
-                          'error:\n%s', traceback.format_exc())
+            except Exception as e:
+                with self.exclusive:
+                    if self._evq:
+                        self._evq.put(e)
+                        return
                 if self.restart_on_error:
+                    log.error('Restarting IPDB instance after '
+                              'error:\n%s', traceback.format_exc())
                     try:
                         self.initdb()
                     except:
@@ -958,6 +1423,7 @@ class IPDB(object):
                         return
                     continue
                 else:
+                    log.error('Emergency shutdown, cleanup manually')
                     raise RuntimeError('Emergency shutdown')
 
             for msg in messages:
@@ -975,31 +1441,35 @@ class IPDB(object):
                         for func in self._event_map[event]:
                             func(msg)
 
-                # run post-callbacks
-                # NOTE: post-callbacks are asynchronous
-                for (cuid, cb) in tuple(self._post_callbacks.items()):
-                    t = threading.Thread(name="IPDB callback %s" % (id(cb)),
-                                         target=cb,
-                                         args=(self, msg, msg['event']))
-                    t.start()
-                    if cuid not in self._cb_threads:
-                        self._cb_threads[cuid] = set()
-                    self._cb_threads[cuid].add(t)
+                    # Post-callbacks
+                    try:
+                        self._cbq.put_nowait(msg)
+                        if self._cbq_drop:
+                            log.warning('dropped %d events',
+                                        self._cbq_drop)
+                            self._cbq_drop = 0
+                    except queue.Full:
+                        self._cbq_drop += 1
+                    except Exception:
+                        log.error('Emergency shutdown, cleanup manually')
+                        raise RuntimeError('Emergency shutdown')
 
-                # occasionally join cb threads
-                for cuid in tuple(self._cb_threads):
-                    for t in tuple(self._cb_threads.get(cuid, ())):
-                        t.join(0)
-                        if not t.is_alive():
-                            try:
-                                self._cb_threads[cuid].remove(t)
-                            except KeyError:
-                                pass
-                            if len(self._cb_threads.get(cuid, ())) == 0:
-                                del self._cb_threads[cuid]
+                    #
+                    # Why not to put these two pieces of the code
+                    # it in a routine?
+                    #
+                    # TODO: run performance tests with routines
 
-    def init_ipaddr_set(self):
-        if self.sort_addresses:
-            return SortedIPaddrSet()
-        else:
-            return IPaddrSet()
+                    # Users event queue
+                    if self._evq:
+                        try:
+                            self._evq.put_nowait(msg)
+                            if self._evq_drop:
+                                log.warning("dropped %d events",
+                                            self._evq_drop)
+                                self._evq_drop = 0
+                        except queue.Full:
+                            self._evq_drop += 1
+                        except Exception as e:
+                            log.error('Emergency shutdown, cleanup manually')
+                            raise RuntimeError('Emergency shutdown')

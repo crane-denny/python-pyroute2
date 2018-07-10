@@ -3,6 +3,7 @@ import os
 import struct
 import logging
 from math import log as logfm
+from pyroute2 import config
 from pyroute2.common import size_suffixes
 from pyroute2.common import time_suffixes
 from pyroute2.common import rate_suffixes
@@ -30,8 +31,9 @@ try:
     clock_factor = float(clock_res) / TIME_UNITS_PER_SEC
     tick_in_usec = float(t2us) / us2t * clock_factor
 except IOError as e:
-    log.warning("tcmsg: %s", e)
-    log.warning("the tc subsystem functionality is limited")
+    if config.uname[0] == 'Linux':
+        log.warning("tcmsg: %s", e)
+        log.warning("the tc subsystem functionality is limited")
     clock_res = 0
     clock_factor = 1
     tick_in_usec = 1
@@ -90,7 +92,7 @@ def percent2u32(pct):
     '''xlate a percentage to an uint32 value
     0% -> 0
     100% -> 2**32 - 1'''
-    return int((2**32 - 1)*pct/100)
+    return int((2 ** 32 - 1) * pct / 100)
 
 
 def red_eval_ewma(qmin, burst, avpkt):
@@ -177,9 +179,15 @@ def get_rate_parameters(kwarg):
 
 tc_actions = {'unspec': -1,     # TC_ACT_UNSPEC
               'ok': 0,          # TC_ACT_OK
+              'reclassify': 1,  # TC_ACT_RECLASSIFY
               'shot': 2,        # TC_ACT_SHOT
               'drop': 2,        # TC_ACT_SHOT
-              'pipe': 3}        # TC_ACT_PIPE
+              'pipe': 3,        # TC_ACT_PIPE
+              'stolen': 4,      # TC_ACT_STOLEN
+              'queued': 5,      # TC_ACT_QUEUED
+              'repeat': 6,      # TC_ACT_REPEAT
+              'redirect': 7,    # TC_ACT_REDIRECT
+              }
 
 
 class nla_plus_rtab(nla):
@@ -234,6 +242,7 @@ class nla_plus_rtab(nla):
 
     class rtab(nla):
         fields = (('value', 's'), )
+        own_parent = True
 
         def encode(self):
             parms = self.parent.get_encoded('TCA_TBF_PARMS') or \

@@ -7,13 +7,17 @@ from pyroute2.netlink.rtnl import rt_proto
 from pyroute2.netlink.rtnl import rt_scope
 from pyroute2.netlink.rtnl import encap_type
 from pyroute2.netlink.rtnl.ifinfmsg import ifinfmsg
+from pyroute2.netlink.rtnl.ifinfmsg import protinfo_bridge
+from pyroute2.netlink.rtnl.ifinfmsg.plugins.vlan import flags as vlan_flags
 from pyroute2.netlink.rtnl.rtmsg import rtmsg
 from pyroute2.netlink.rtnl.rtmsg import nh as nh_header
 from pyroute2.netlink.rtnl.fibmsg import FR_ACT_NAMES
 
 
 encap_types = {'mpls': 1,
-               AF_MPLS: 1}
+               AF_MPLS: 1,
+               'seg6': 5,
+               'bpf': 6}
 
 
 class IPRequest(dict):
@@ -77,6 +81,10 @@ class IPRouteRequest(IPRequest):
                'proto': rt_proto,
                'scope': rt_scope}
 
+    def __init__(self, obj=None):
+        self._mask = []
+        IPRequest.__init__(self, obj)
+
     def encap_header(self, header):
         '''
         Encap header transform. Format samples:
@@ -117,6 +125,76 @@ class IPRouteRequest(IPRequest):
             if override_bos:
                 ret[-1]['bos'] = 1
             return {'attrs': [['MPLS_IPTUNNEL_DST', ret]]}
+        '''
+        Seg6 encap header transform. Format samples:
+
+            {'type': 'seg6',
+             'mode': 'encap',
+             'segs': '2000::5,2000::6'}
+
+            {'type': 'seg6',
+             'mode': 'encap'
+             'segs': '2000::5,2000::6',
+             'hmac': 1}
+        '''
+        if header['type'] == 'seg6':
+            # Init step
+            ret = {}
+            # Parse segs
+            segs = header['segs']
+            # If they are in the form in_addr6,in_addr6
+            if isinstance(segs, basestring):
+                # Create an array with the splitted values
+                temp = segs.split(',')
+                # Init segs
+                segs = []
+                # Iterate over the values
+                for seg in temp:
+                    # Discard empty string
+                    if seg != '':
+                        # Add seg to segs
+                        segs.append(seg)
+            # Retrieve mode
+            mode = header['mode']
+            # hmac is optional and contains the hmac key
+            hmac = header.get('hmac', None)
+            # Construct the new object
+            ret = {'mode': mode, 'segs': segs}
+            # If hmac is present convert to u32
+            if hmac:
+                # Add to ret the hmac key
+                ret['hmac'] = hmac & 0xffffffff
+            # Done return the object
+            return {'attrs': [['SEG6_IPTUNNEL_SRH', ret]]}
+        '''
+        BPF encap header transform. Format samples:
+
+            {'type': 'bpf',
+             'in': {'fd':4, 'name':'firewall'}}
+
+            {'type': 'bpf',
+             'in'  : {'fd':4, 'name':'firewall'},
+             'out' : {'fd':5, 'name':'stats'},
+             'xmit': {'fd':6, 'name':'vlan_push', 'headroom':4}}
+        '''
+        if header['type'] == 'bpf':
+            attrs = {}
+            for key, value in header.items():
+                if key not in ['in', 'out', 'xmit']:
+                    continue
+
+                obj = [['LWT_BPF_PROG_FD', value['fd']],
+                       ['LWT_BPF_PROG_NAME', value['name']]]
+                if key == 'in':
+                    attrs['LWT_BPF_IN'] = {'attrs': obj}
+                elif key == 'out':
+                    attrs['LWT_BPF_OUT'] = {'attrs': obj}
+                elif key == 'xmit':
+                    attrs['LWT_BPF_XMIT'] = {'attrs': obj}
+                    if 'headroom' in value:
+                        attrs['LWT_BPF_XMIT_HEADROOM'] = value['headroom']
+
+            return {'attrs': attrs.items()}
 
     def mpls_rta(self, value):
         ret = []
@@ -149,28 +227,33 @@ class IPRouteRequest(IPRequest):
             dict.__setitem__(self, 'dst_len', 20)
             dict.__setitem__(self, 'table', 254)
             dict.__setitem__(self, 'type', 1)
-        elif key == 'flags':
-            if self['family'] == AF_MPLS:
-                return
-        elif key == 'dst':
+        elif key == 'flags' and self.get('family', None) == AF_MPLS:
+            return
+        elif key in ('dst', 'src'):
             if isinstance(value, dict):
-                dict.__setitem__(self, 'dst', value)
+                dict.__setitem__(self, key, value)
             elif isinstance(value, int):
-                dict.__setitem__(self, 'dst', {'label': value,
-                                               'bos': 1})
+                dict.__setitem__(self, key, {'label': value,
+                                             'bos': 1})
             elif value != 'default':
                 value = value.split('/')
+                mask = None
                 if len(value) == 1:
                     dst = value[0]
-                    mask = 0
+                    if self.get('family', 0) == AF_INET:
+                        mask = 32
+                    elif self.get('family', 0) == AF_INET6:
+                        mask = 128
+                    else:
+                        self._mask.append('%s_len' % key)
                 elif len(value) == 2:
                     dst = value[0]
                     mask = int(value[1])
                 else:
-                    raise ValueError('wrong destination')
-                dict.__setitem__(self, 'dst', dst)
-                if mask:
-                    dict.__setitem__(self, 'dst_len', mask)
+                    raise ValueError('wrong address spec')
+                dict.__setitem__(self, key, dst)
+                if mask is not None:
+                    dict.__setitem__(self, '%s_len' % key, mask)
         elif key == 'newdst':
             dict.__setitem__(self, 'newdst', self.mpls_rta(value))
         elif key in self.resolve.keys():
@@ -186,6 +269,40 @@ class IPRouteRequest(IPRequest):
                 #
                 # 'type' is mandatory
                 if 'type' in value and 'labels' in value:
+                    dict.__setitem__(self, 'encap_type',
+                                     encap_types.get(value['type'],
+                                                     value['type']))
+                    dict.__setitem__(self, 'encap',
+                                     self.encap_header(value))
+                # human-friendly form:
+                #
+                # 'encap': {'type': 'seg6',
+                #           'mode': 'encap'
+                #           'segs': '2000::5,2000::6'}
+                #
+                # 'encap': {'type': 'seg6',
+                #           'mode': 'inline'
+                #           'segs': '2000::5,2000::6'
+                #           'hmac': 1}
+                #
+                # 'encap': {'type': 'seg6',
+                #           'mode': 'encap'
+                #           'segs': '2000::5,2000::6'
+                #           'hmac': 0xf}
+                #
+                # 'encap': {'type': 'seg6',
+                #           'mode': 'inline'
+                #           'segs': ['2000::5', '2000::6']}
+                #
+                # 'type', 'mode' and 'segs' are mandatory
+                if 'type' in value and 'mode' in value and 'segs' in value:
+                    dict.__setitem__(self, 'encap_type',
+                                     encap_types.get(value['type'],
+                                                     value['type']))
+                    dict.__setitem__(self, 'encap',
+                                     self.encap_header(value))
+                elif 'type' in value and ('in' in value or 'out' in value or
+                                          'xmit' in value):
                     dict.__setitem__(self, 'encap_type',
                                      encap_types.get(value['type'],
                                                      value['type']))
@@ -242,6 +359,14 @@ class IPRouteRequest(IPRequest):
                 ret.append(nh)
             if ret:
                 dict.__setitem__(self, 'multipath', ret)
+        elif key == 'family':
+            for d in self._mask:
+                if value == AF_INET:
+                    dict.__setitem__(self, d, 32)
+                elif value == AF_INET6:
+                    dict.__setitem__(self, d, 128)
+            self._mask = []
+            dict.__setitem__(self, key, value)
         else:
             dict.__setitem__(self, key, value)
 
@@ -278,6 +403,25 @@ class IPBridgeRequest(IPRequest):
             dict.__setitem__(self, key, value)
 
 
+class IPBrPortRequest(dict):
+
+    def __init__(self, obj=None):
+        dict.__init__(self)
+        dict.__setitem__(self, 'attrs', [])
+        self.allowed = [x[0] for x in protinfo_bridge.nla_map]
+        if obj is not None:
+            self.update(obj)
+
+    def update(self, obj):
+        for key in obj:
+            self[key] = obj[key]
+
+    def __setitem__(self, key, value):
+        key = protinfo_bridge.name2nla(key)
+        if key in self.allowed:
+            self['attrs'].append((key, value))
+
+
 class IPLinkRequest(IPRequest):
     '''
     Utility class, that converts human-readable dictionary
@@ -286,11 +430,104 @@ class IPLinkRequest(IPRequest):
     blacklist = ['carrier',
                  'carrier_changes']
 
+    # get common ifinfmsg NLAs
+    common = []
+    for (key, _) in ifinfmsg.nla_map:
+        common.append(key)
+        common.append(key[len(ifinfmsg.prefix):].lower())
+    common.append('family')
+    common.append('ifi_type')
+    common.append('index')
+    common.append('flags')
+    common.append('change')
+
     def __init__(self, *argv, **kwarg):
         self.deferred = []
+        self.kind = None
+        self.specific = {}
+        self.linkinfo = None
+        self._info_data = None
         IPRequest.__init__(self, *argv, **kwarg)
         if 'index' not in self:
             self['index'] = 0
+
+    @property
+    def info_data(self):
+        if self._info_data is None:
+            info_data = ('IFLA_INFO_DATA', {'attrs': []})
+            self._info_data = info_data[1]['attrs']
+            self.linkinfo.append(info_data)
+        return self._info_data
+
+    def flush_deferred(self):
+        # create IFLA_LINKINFO
+        linkinfo = {'attrs': []}
+        self.linkinfo = linkinfo['attrs']
+        dict.__setitem__(self, 'IFLA_LINKINFO', linkinfo)
+        self.linkinfo.append(['IFLA_INFO_KIND', self.kind])
+        # load specific NLA names
+        cls = ifinfmsg.ifinfo.data_map.get(self.kind, None)
+        if cls is not None:
+            prefix = cls.prefix or 'IFLA_'
+            for nla, _ in cls.nla_map:
+                self.specific[nla] = nla
+                self.specific[nla[len(prefix):].lower()] = nla
+
+        # flush deferred NLAs
+        for (key, value) in self.deferred:
+            if not self.set_specific(key, value):
+                dict.__setitem__(self, key, value)
+
+        self.deferred = []
+
+    def set_specific(self, key, value):
+        # FIXME: vlan hack
+        if self.kind == 'vlan' and key == 'vlan_flags':
+            if isinstance(value, (list, tuple)):
+                if len(value) == 2 and \
+                        all((isinstance(x, int) for x in value)):
+                    value = {'flags': value[0],
+                             'mask': value[1]}
+                else:
+                    ret = 0
+                    for x in value:
+                        ret |= vlan_flags.get(x, 1)
+                    value = {'flags': ret,
+                             'mask': ret}
+            elif isinstance(value, int):
+                value = {'flags': value,
+                         'mask': value}
+            elif isinstance(value, basestring):
+                value = vlan_flags.get(value, 1)
+                value = {'flags': value,
+                         'mask': value}
+            elif not isinstance(value, dict):
+                raise ValueError()
+        # the kind is known: lookup the NLA
+        if key in self.specific:
+            self.info_data.append((self.specific[key], value))
+            return True
+        elif key == 'peer' and self.kind == 'veth':
+            # FIXME: veth hack
+            if isinstance(value, dict):
+                attrs = []
+                for k, v in value.items():
+                    attrs.append([ifinfmsg.name2nla(k), v])
+            else:
+                attrs = [['IFLA_IFNAME', value], ]
+            nla = ['VETH_INFO_PEER', {'attrs': attrs}]
+            self.info_data.append(nla)
+            return True
+        elif key == 'mode':
+            # FIXME: ipvlan / tuntap / bond hack
+            if self.kind == 'tuntap':
+                nla = ['IFTUN_MODE', value]
+            else:
+                nla = ['IFLA_%s_MODE' % self.kind.upper(), value]
+            self.info_data.append(nla)
+            return True
+
+        return False
 
     def __setitem__(self, key, value):
         # ignore blacklisted attributes
@@ -308,114 +545,14 @@ class IPLinkRequest(IPRequest):
         except NameError:
             pass
 
-        # set up specific keys
-        if key == 'kind':
-            self['IFLA_LINKINFO'] = {'attrs': []}
-            linkinfo = self['IFLA_LINKINFO']['attrs']
-            linkinfo.append(['IFLA_INFO_KIND', value])
-            if value in ('vlan', 'bond', 'tuntap', 'veth',
-                         'vxlan', 'macvlan', 'macvtap', 'gre',
-                         'gretap', 'ipvlan', 'bridge', 'vrf',
-                         'ip6gre', 'ip6gretap'):
-                linkinfo.append(['IFLA_INFO_DATA', {'attrs': []}])
-        elif key == 'vlan_id':
-            nla = ['IFLA_VLAN_ID', value]
-            # FIXME: we need to replace, not add
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'vlan')
-        elif key == 'gid':
-            nla = ['IFTUN_UID', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'tuntap')
-        elif key == 'uid':
-            nla = ['IFTUN_UID', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'tuntap')
-        elif key == 'mode':
-            nla = ['IFLA_IPVLAN_MODE', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'ipvlan')
-            nla = ['IFTUN_MODE', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'tuntap')
-            nla = ['IFLA_BOND_MODE', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'bond')
-        elif key == 'stp_state':
-            nla = ['IFLA_BRIDGE_STP_STATE', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'bridge')
-        elif key == 'ifr':
-            nla = ['IFTUN_IFR', value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'tuntap')
-        elif key.startswith('macvtap_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'macvtap')
-        elif key.startswith('macvlan_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'macvlan')
-        elif key.startswith('gre_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'gre' or
-                           x.get('kind', None) == 'gretap')
-        elif key.startswith('ip6gre_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'ip6gre' or
-                           x.get('kind', None) == 'ip6gretap')
-        elif key.startswith('vxlan_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'vxlan')
-        elif key.startswith('vrf_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'vrf')
-        elif key.startswith('br_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'bridge')
-        elif key.startswith('bond_'):
-            nla = [ifinfmsg.name2nla(key), value]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'bond')
-        elif key == 'peer':
-            if isinstance(value, dict):
-                attrs = []
-                for k, v in value.items():
-                    attrs.append([ifinfmsg.name2nla(k), v])
-            else:
-                attrs = [['IFLA_IFNAME', value], ]
-            nla = ['VETH_INFO_PEER', {'attrs': attrs}]
-            self.defer_nla(nla, ('IFLA_LINKINFO', 'IFLA_INFO_DATA'),
-                           lambda x: x.get('kind', None) == 'veth')
-        dict.__setitem__(self, key, value)
-        if self.deferred:
+        if key == 'kind' and not self.kind:
+            self.kind = value
             self.flush_deferred()
-
-    def flush_deferred(self):
-        deferred = []
-        for nla, path, predicate in self.deferred:
-            if predicate(self):
-                self.append_nla(nla, path)
+        elif self.kind is None:
+            if key in self.common:
+                dict.__setitem__(self, key, value)
             else:
-                deferred.append((nla, path, predicate))
-        self.deferred = deferred
-
-    def append_nla(self, nla, path):
-            pwd = self
-            for step in path:
-                if step in pwd:
-                    pwd = pwd[step]
-                else:
-                    pwd = [x[1] for x in pwd['attrs']
-                           if x[0] == step][0]['attrs']
-            pwd.append(nla)
-
-    def defer_nla(self, nla, path, predicate):
-        self.deferred.append((nla, path, predicate))
-        self.flush_deferred()
+                self.deferred.append((key, value))
+        else:
+            if not self.set_specific(key, value):
+                dict.__setitem__(self, key, value)

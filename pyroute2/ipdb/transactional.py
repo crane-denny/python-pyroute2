@@ -1,14 +1,16 @@
 '''
 '''
+import logging
 import threading
-from pyroute2.config import TransactionalBase
 from pyroute2.common import uuid32
+from pyroute2.common import Dotkeys
 from pyroute2.ipdb.linkedset import LinkedSet
 from pyroute2.ipdb.exceptions import CommitException
 
 # How long should we wait on EACH commit() checkpoint: for ipaddr,
 # ports etc. That's not total commit() timeout.
 SYNC_TIMEOUT = 5
+log = logging.getLogger(__name__)
 
 
 class State(object):
@@ -45,6 +47,8 @@ def update(f):
             # short-circuit
             with self._write_lock:
                 return f(self, True, *argv, **kwarg)
+        elif self._mode == 'readonly':
+            raise RuntimeError('can not change readonly object')
 
         with self._write_lock:
             direct = self._direct_state.is_set()
@@ -77,7 +81,7 @@ def with_transaction(f):
     return update(decorated)
 
 
-class Transactional(TransactionalBase):
+class Transactional(Dotkeys):
     '''
     Utility class that implements common transactional logic.
     '''
@@ -120,7 +124,11 @@ class Transactional(TransactionalBase):
         self._linked_sets = self._linked_sets or set()
         #
         for i in self._fields:
-            TransactionalBase.__setitem__(self, i, None)
+            Dotkeys.__setitem__(self, i, None)
+
+    @property
+    def ro(self):
+        return self.pick(detached=False, readonly=True)
 
     def register_commit_hook(self, hook):
         '''
@@ -152,7 +160,7 @@ class Transactional(TransactionalBase):
                         res[key] = self[key]
             return res
 
-    def pick(self, detached=True, uid=None, parent=None):
+    def pick(self, detached=True, uid=None, parent=None, readonly=False):
         '''
         Get a snapshot of the object. Can be of two
         types:
@@ -169,19 +177,24 @@ class Transactional(TransactionalBase):
                                  parent=parent,
                                  uid=uid)
             for (key, value) in self.items():
-                if key in self._fields:
-                    if self[key] is not None:
+                if self[key] is not None:
+                    if key in self._fields:
                         res[key] = self[key]
             for key in self._linked_sets:
                 res[key] = type(self[key])(self[key])
                 if not detached:
                     self[key].connect(res[key])
+            if readonly:
+                res._mode = 'readonly'
+
             return res
 
     ##
     # Context management: enter, exit
     def __enter__(self):
-        if self._mode not in ('implicit', 'explicit'):
+        if self._mode == 'readonly':
+            return self
+        elif self._mode not in ('implicit', 'explicit'):
             raise TypeError('context managers require a transactional mode')
         if not self.current_tx:
             self.begin()
@@ -189,7 +202,9 @@ class Transactional(TransactionalBase):
 
     def __exit__(self, exc_type, exc_value, traceback):
         # apply transaction only if there was no error
-        if exc_type is None:
+        if self._mode == 'readonly':
+            return
+        elif exc_type is None:
             try:
                 self.commit()
             except Exception as e:
@@ -269,6 +284,24 @@ class Transactional(TransactionalBase):
 
     def last_snapshot_id(self):
         return self._sids[-1]
+
+    def invalidate(self):
+        # on failure, invalidate the interface and detach it
+        # from the parent
+        # 0. obtain lock on IPDB, to avoid deadlocks
+        # ... all the DB updates will wait
+        with self.ipdb.exclusive:
+            # 1. drop the IPRoute() link
+            self.nl = None
+            # 2. clean up ipdb
+            self.detach()
+            # 3. invalidate the interface
+            with self._direct_state:
+                for i in tuple(self.keys()):
+                    del self[i]
+                self['ipdb_scope'] = 'invalid'
+            # 4. the rest
+            self._mode = 'invalid'
 
     ##
     # Snapshot methods
@@ -362,12 +395,18 @@ class Transactional(TransactionalBase):
         Review the changes made in the transaction `tid`
         or in the current active transaction (thread-local)
         '''
-        tid = tid or self.current_tx.uid
-        if tid is None:
+        if self.current_tx is None:
             raise TypeError('start a transaction first')
 
+        tid = tid or self.current_tx.uid
+
         if self.get('ipdb_scope') == 'create':
-            return dict([(x[0], x[1]) for x in self.items()
+            if self.current_tx is not None:
+                prime = self.current_tx
+            else:
+                log.warning('the "create" scope without transaction')
+                prime = self
+            return dict([(x[0], x[1]) for x in prime.items()
                          if x[1] is not None])
 
         with self._write_lock:
@@ -393,7 +432,7 @@ class Transactional(TransactionalBase):
             else:
                 tx = self.global_tx[tid]
 
-            if self.current_tx and self.current_tx.uid == tid:
+            if self.current_tx == tx:
                 self.current_tx = None
 
             # detach linked sets
@@ -423,7 +462,7 @@ class Transactional(TransactionalBase):
                 transaction._targets[key] = threading.Event()
         else:
             # set the item
-            TransactionalBase.__setitem__(self, key, value)
+            Dotkeys.__setitem__(self, key, value)
 
             # update on local targets
             with self._write_lock:
@@ -450,7 +489,7 @@ class Transactional(TransactionalBase):
             if key in transaction:
                 del transaction[key]
         else:
-            TransactionalBase.__delitem__(self, key)
+            Dotkeys.__delitem__(self, key)
 
     def option(self, key, value):
         self[key] = value
@@ -476,6 +515,8 @@ class Transactional(TransactionalBase):
         with self._write_lock:
             self._local_targets[key] = threading.Event()
             self._local_targets[key].value = value
+            if self.get(key) == value:
+                self._local_targets[key].set()
             return self
 
     def mirror_target(self, key_from, key_to):

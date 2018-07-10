@@ -1,10 +1,17 @@
 from pyroute2.netlink.rtnl.tcmsg import act_gact
 from pyroute2.netlink.rtnl.tcmsg import act_bpf
 from pyroute2.netlink.rtnl.tcmsg import act_police
+from pyroute2.netlink.rtnl.tcmsg import act_mirred
+from pyroute2.netlink.rtnl.tcmsg import act_connmark
+from pyroute2.netlink.rtnl.tcmsg import act_vlan
 
 plugins = {'gact': act_gact,
            'bpf': act_bpf,
-           'police': act_police}
+           'police': act_police,
+           'mirred': act_mirred,
+           'connmark': act_connmark,
+           'vlan': act_vlan,
+           }
 
 
 class nla_plus_tca_act_opt(object):

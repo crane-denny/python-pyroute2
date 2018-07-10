@@ -195,7 +195,7 @@ You can also make your own NLA descriptions::
                    ...)
 
         class cacheinfo(nla):
-            fields = (('ifa_prefered', 'I'),
+            fields = (('ifa_preferred', 'I'),
                       ('ifa_valid', 'I'),
                       ('cstamp', 'I'),
                       ('tstamp', 'I'))
@@ -386,6 +386,7 @@ Please notice, that NLA list *MUST* be mutable.
 
 '''
 
+import weakref
 import traceback
 import logging
 import struct
@@ -587,21 +588,37 @@ class nlmsg_base(dict):
     fields = tuple()
     header = tuple()
     pack = None                  # pack pragma
-    decoded = False
-    nla_array = False
     cell_header = None
     align = 4
     nla_map = {}                 # NLA mapping
-    nla_flags = 0                # NLA flags
-    nla_init = None              # NLA initstring
+    sql_constraints = {}
+    sql_extra_fields = tuple()
+    nla_flags = 0        # NLA flags
     value_map = {}
     is_nla = False
+    prefix = None
+    own_parent = False
     # caches
     __compiled_nla = False
     __compiled_ft = False
     __t_nla_map = None
     __r_nla_map = None
-    __ft_decode = None
+
+    __slots__ = (
+        "_buf",
+        "data",
+        "offset",
+        "length",
+        "parent",
+        "decoded",
+        "_nla_init",
+        "_nla_array",
+        "_nla_flags",
+        "value",
+        "_ft_decode",
+        "_r_value_map",
+        "__weakref__"
+    )
 
     def msg_align(self, l):
         return (l + self.align - 1) & ~ (self.align - 1)
@@ -620,27 +637,58 @@ class nlmsg_base(dict):
         self.data = data or bytearray()
         self.offset = offset
         self.length = length or 0
-        self.parent = parent
-        self.prefix = None
-        self.nla_init = init
+        if parent is not None:
+            # some structures use parents, some not,
+            # so don't create cycles without need
+            self.parent = parent if self.own_parent else weakref.proxy(parent)
+        else:
+            self.parent = None
+        self.decoded = False
+        self._nla_init = init
+        self._nla_array = False
+        self._nla_flags = self.nla_flags
         self['attrs'] = []
         self['value'] = NotInitialized
         self.value = NotInitialized
         # work only on non-empty mappings
-        if self.nla_map:
-            if self.__class__.__compiled_nla:
-                self.t_nla_map = self.__class__.__t_nla_map
-                self.r_nla_map = self.__class__.__r_nla_map
-            else:
-                self.compile_nla()
+        if self.nla_map and not self.__class__.__compiled_nla:
+            self.compile_nla()
         # compile fast-track for particular types
         if id(self.__class__) in cache_jit:
-            self.ft_decode = cache_jit[id(self.__class__)]['ft_decode']
+            self._ft_decode = cache_jit[id(self.__class__)]['ft_decode']
         else:
             self.compile_ft()
-        self.r_value_map = dict([(x[1], x[0]) for x in self.value_map.items()])
+        self._r_value_map = dict([
+            (x[1], x[0]) for x in self.value_map.items()
+        ])
         if self.header:
             self['header'] = {}
+
+    @classmethod
+    def sql_schema(cls):
+        ret = []
+        for field in cls.fields:
+            if field[0][0] != '_':
+                ret.append((field[0],
+                            ' '.join(('INTEGER',
+                                      cls.sql_constraints.get(field[0], '')))))
+        for nla in cls.nla_map:
+            if isinstance(nla[0], basestring):
+                nla_name = nla[0]
+                nla_type = nla[1]
+            else:
+                nla_name = nla[1]
+                nla_type = nla[2]
+            nla_type = getattr(cls, nla_type, None)
+            sql_type = getattr(nla_type, 'sql_type', None)
+            if sql_type:
+                sql_type = ' '.join((sql_type,
+                                     cls.sql_constraints.get(nla_name, '')))
+                ret.append((nla_name, sql_type))
+
+        for field in cls.sql_extra_fields:
+            ret.append(field)
+        return ret
 
     @property
     def buf(self):
@@ -883,7 +931,7 @@ class nlmsg_base(dict):
             # If the key exists, the statement after the first `or` is not
             # executed.
             if self.is_nla:
-                key = tuple(self.data[offset:offset+4])
+                key = tuple(self.data[offset:offset + 4])
                 self['header'] = cache_hdr.get(key, None) or \
                     (cache_hdr
                      .__setitem__(key,
@@ -905,20 +953,20 @@ class nlmsg_base(dict):
                 # it can not be less than 4
                 self.length = max(self['header']['length'], 4)
         # handle the array case
-        if self.nla_array:
+        if self._nla_array:
             self.setvalue([])
             while offset < self.offset + self.length:
                 cell = type(self)(data=self.data,
                                   offset=offset,
                                   parent=self)
-                cell.nla_array = False
+                cell._nla_array = False
                 if cell.cell_header is not None:
                     cell.header = cell.cell_header
                 cell.decode()
                 self.value.append(cell)
                 offset += (cell.length + 4 - 1) & ~ (4 - 1)
         else:
-            self.ft_decode(self, offset)
+            self._ft_decode(self, offset)
 
         if clean_cbs:
             self.unregister_clean_cb()
@@ -949,12 +997,13 @@ class nlmsg_base(dict):
             offset += hsize
 
         # handle the array case
-        if self.nla_array:
+        if self._nla_array:
             for value in self.getvalue():
                 cell = type(self)(data=self.data,
                                   offset=offset,
                                   parent=self)
-                cell.nla_array = False
+                cell._nla_array = False
+                cell['header']['type'] = 1
                 if cell.cell_header is not None:
                     cell.header = cell.cell_header
                 cell.setvalue(value)
@@ -1032,7 +1081,7 @@ class nlmsg_base(dict):
                     self['attrs'].append([nla[0], nlv.getvalue()])
         else:
             try:
-                value = self.r_value_map.get(value, value)
+                value = self._r_value_map.get(value, value)
             except TypeError:
                 pass
             self['value'] = value
@@ -1149,14 +1198,11 @@ class nlmsg_base(dict):
         return self
 
     @staticmethod
-    def ft_decode(self, offset):
-        raise NotImplementedError()
-
-    @staticmethod
     def _ft_decode_zstring(self, offset):
-        self['value'], = struct.unpack_from('%is' % (self.length - 5),
-                                            self.data,
-                                            offset)
+        value, = struct.unpack_from('%is' % (self.length - 4),
+                                    self.data,
+                                    offset)
+        self['value'] = value.strip(b'\0')
 
     @staticmethod
     def _ft_decode_string(self, offset):
@@ -1225,19 +1271,19 @@ class nlmsg_base(dict):
     def compile_ft(self):
         global cache_jit
         if self.fields and self.fields[0][1] == 's':
-            self.ft_decode = self._ft_decode_string
+            self._ft_decode = self._ft_decode_string
         elif self.fields and self.fields[0][1] == 'z':
-            self.ft_decode = self._ft_decode_zstring
+            self._ft_decode = self._ft_decode_zstring
         elif self.pack == 'struct':
-            self.ft_decode = self._ft_decode_packed
+            self._ft_decode = self._ft_decode_packed
         else:
-            self.ft_decode = self._ft_decode_generic
-        cache_jit[id(self.__class__)] = {'ft_decode': self.ft_decode}
+            self._ft_decode = self._ft_decode_generic
+        cache_jit[id(self.__class__)] = {'ft_decode': self._ft_decode}
 
     def compile_nla(self):
         # clean up NLA mappings
-        self.t_nla_map = {}
-        self.r_nla_map = {}
+        t_nla_map = {}
+        r_nla_map = {}
 
         # fix nla flags
         nla_map = []
@@ -1286,10 +1332,10 @@ class nlmsg_base(dict):
                      'nla_flags': nla_flags,
                      'nla_array': nla_array,
                      'init': init}
-            self.t_nla_map[key] = self.r_nla_map[name] = prime
+            t_nla_map[key] = r_nla_map[name] = prime
 
-        self.__class__.__t_nla_map = self.t_nla_map
-        self.__class__.__r_nla_map = self.r_nla_map
+        self.__class__.__t_nla_map = t_nla_map
+        self.__class__.__r_nla_map = r_nla_map
         self.__class__.__compiled_nla = True
 
     def encode_nlas(self, offset):
@@ -1297,10 +1343,11 @@ class nlmsg_base(dict):
         Encode the NLA chain. Should not be called manually, since
         it is called from `encode()` routine.
         '''
+        r_nla_map = self.__class__.__r_nla_map
         for i in range(len(self['attrs'])):
             cell = self['attrs'][i]
-            if cell[0] in self.r_nla_map:
-                prime = self.r_nla_map[cell[0]]
+            if cell[0] in r_nla_map:
+                prime = r_nla_map[cell[0]]
                 msg_class = prime['class']
                 # is it a class or a function?
                 if isinstance(msg_class, types.FunctionType):
@@ -1311,9 +1358,11 @@ class nlmsg_base(dict):
                                 offset=offset,
                                 parent=self,
                                 init=prime['init'])
-                nla.nla_flags |= prime['nla_flags']
-                nla.nla_array = prime['nla_array']
-                nla['header']['type'] = prime['type'] | nla.nla_flags
+                nla._nla_flags |= prime['nla_flags']
+                if isinstance(cell, tuple) and len(cell) > 2:
+                    nla._nla_flags |= cell[2]
+                nla._nla_array = prime['nla_array']
+                nla['header']['type'] = prime['type'] | nla._nla_flags
                 nla.setvalue(cell[1])
                 try:
                     nla.encode()
@@ -1330,6 +1379,7 @@ class nlmsg_base(dict):
         Decode the NLA chain. Should not be called manually, since
         it is called from `decode()` routine.
         '''
+        t_nla_map = self.__class__.__t_nla_map
         while offset - self.offset <= self.length - 4:
             nla = None
             # pick the length and the type
@@ -1340,11 +1390,11 @@ class nlmsg_base(dict):
             # rewind to the beginning
             length = min(max(length, 4), (self.length - offset + self.offset))
             # we have a mapping for this NLA
-            if msg_type in self.t_nla_map:
+            if msg_type in t_nla_map:
 
-                prime = self.t_nla_map[msg_type]
+                prime = t_nla_map[msg_type]
                 # get the class
-                msg_class = self.t_nla_map[msg_type]['class']
+                msg_class = t_nla_map[msg_type]['class']
                 # is it a class or a function?
                 if isinstance(msg_class, types.FunctionType):
                     # if it is a function -- use it to get the class
@@ -1357,9 +1407,9 @@ class nlmsg_base(dict):
                                 parent=self,
                                 length=length,
                                 init=prime['init'])
-                nla.nla_array = prime['nla_array']
-                nla.nla_flags = base_msg_type & (NLA_F_NESTED |
-                                                 NLA_F_NET_BYTEORDER)
+                nla._nla_array = prime['nla_array']
+                nla._nla_flags = base_msg_type & (NLA_F_NESTED |
+                                                  NLA_F_NET_BYTEORDER)
                 name = prime['name']
             else:
                 name = 'UNKNOWN'
@@ -1372,6 +1422,10 @@ class nlmsg_base(dict):
 
 
 class nla_slot(object):
+
+    __slots__ = (
+        "cell",
+    )
 
     def __init__(self, name, value):
         self.cell = (name, value)
@@ -1392,11 +1446,11 @@ class nla_slot(object):
         if self.try_to_decode():
             return cell.getvalue()
         else:
-            return cell.data[cell.offset:cell.offset+cell.length]
+            return cell.data[cell.offset:cell.offset + cell.length]
 
     def get_flags(self):
         if self.try_to_decode():
-            return self.cell[1].nla_flags
+            return self.cell[1]._nla_flags
         return None
 
     def __getitem__(self, key):
@@ -1422,6 +1476,9 @@ class nla_base(nlmsg_base):
     '''
     The NLA base class. Use `nla_header` class as the header.
     '''
+
+    __slots__ = ()
+
     is_nla = True
     header = (('length', 'H'),
               ('type', 'H'))
@@ -1431,11 +1488,17 @@ class nlmsg_atoms(nlmsg_base):
     '''
     A collection of base NLA types
     '''
+
+    __slots__ = ()
+
     class none(nla_base):
         '''
         'none' type is used to skip decoding of NLA. You can
         also use 'hex' type to dump NLA's content.
         '''
+
+        __slots__ = ()
+
         def decode(self):
             nla_base.decode(self)
             self.value = None
@@ -1444,6 +1507,9 @@ class nlmsg_atoms(nlmsg_base):
         '''
         'flag' type is used to denote attrs that have no payload
         '''
+
+        __slots__ = ()
+
         fields = []
 
         def decode(self):
@@ -1451,33 +1517,94 @@ class nlmsg_atoms(nlmsg_base):
             self.value = True
 
     class uint8(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', 'B')]
 
     class uint16(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', 'H')]
 
     class uint32(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', 'I')]
 
     class uint64(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', 'Q')]
 
+    class int8(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
+        fields = [('value', 'b')]
+
+    class int16(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
+        fields = [('value', 'h')]
+
     class int32(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', 'i')]
 
+    class int64(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
+        fields = [('value', 'q')]
+
     class be8(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', '>B')]
 
     class be16(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', '>H')]
 
     class be32(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', '>I')]
 
     class be64(nla_base):
+
+        __slots__ = ()
+        sql_type = 'INTEGER'
+
         fields = [('value', '>Q')]
 
     class ipXaddr(nla_base):
+
+        __slots__ = ()
+        sql_type = 'TEXT'
+
         fields = [('value', 's')]
         family = None
 
@@ -1493,12 +1620,18 @@ class nlmsg_atoms(nlmsg_base):
         '''
         Explicit IPv4 address type class.
         '''
+
+        __slots__ = ()
+
         family = AF_INET
 
     class ip6addr(ipXaddr):
         '''
         Explicit IPv6 address type class.
         '''
+
+        __slots__ = ()
+
         family = AF_INET6
 
     class ipaddr(nla_base):
@@ -1510,6 +1643,10 @@ class nlmsg_atoms(nlmsg_base):
         We do not specify here the string size, it will be
         calculated in runtime.
         '''
+
+        __slots__ = ()
+        sql_type = 'TEXT'
+
         fields = [('value', 's')]
 
         def encode(self):
@@ -1539,8 +1676,13 @@ class nlmsg_atoms(nlmsg_base):
         * AF_INET6: IPv6 addr, string: "::1"
         * AF_MPLS: MPLS labels, 0 .. k: [{"label": 0x20, "ttl": 16}, ...]
         '''
+
+        __slots__ = ()
+        sql_type = 'TEXT'
+
         fields = [('value', 's')]
         family = None
+        own_parent = True
 
         def get_family(self):
             if self.family is not None:
@@ -1584,7 +1726,8 @@ class nlmsg_atoms(nlmsg_base):
             elif family == AF_MPLS:
                 self.value = []
                 for i in range(len(self['value']) // 4):
-                    label = struct.unpack('>I', self['value'][i*4:i*4+4])[0]
+                    label = struct.unpack('>I',
+                                          self['value'][i * 4:i * 4 + 4])[0]
                     record = {'label': (label & 0xFFFFF000) >> 12,
                               'tc': (label & 0x00000E00) >> 9,
                               'bos': (label & 0x00000100) >> 8,
@@ -1594,12 +1737,19 @@ class nlmsg_atoms(nlmsg_base):
                 raise TypeError('socket family not supported')
 
     class mpls_target(target):
+
+        __slots__ = ()
+
         family = AF_MPLS
 
     class l2addr(nla_base):
         '''
         Decode MAC address.
         '''
+
+        __slots__ = ()
+        sql_type = 'TEXT'
+
         fields = [('value', '=6s')]
 
         def encode(self):
@@ -1617,6 +1767,9 @@ class nlmsg_atoms(nlmsg_base):
         '''
         Represent NLA's content with header as hex string.
         '''
+
+        __slots__ = ()
+
         fields = [('value', 's')]
 
         def decode(self):
@@ -1627,25 +1780,30 @@ class nlmsg_atoms(nlmsg_base):
         '''
         Array of simple data type
         '''
+
+        __slots__ = (
+            "_fmt",
+        )
+
         fields = [('value', 's')]
-        _fmt = None
+        own_parent = True
 
         @property
         def fmt(self):
             # try to get format from parent
             # work only with elementary types
-            if self._fmt is not None:
+            if getattr(self, "_fmt", None) is not None:
                 return self._fmt
             try:
-                fclass = getattr(self.parent, self.nla_init)
+                fclass = getattr(self.parent, self._nla_init)
                 self._fmt = fclass.fields[0][1]
             except Exception:
-                self._fmt = self.nla_init
+                self._fmt = self._nla_init
             return self._fmt
 
         def encode(self):
             fmt = '%s%i%s' % (self.fmt[:-1], len(self.value), self.fmt[-1:])
-            self['value'] = struct.pack(fmt, self.value)
+            self['value'] = struct.pack(fmt, *self.value)
             nla_base.encode(self)
 
         def decode(self):
@@ -1662,12 +1820,19 @@ class nlmsg_atoms(nlmsg_base):
         '''
         Binary data
         '''
+
+        __slots__ = ()
+
         fields = [('value', 's')]
 
     class string(nla_base):
         '''
         UTF-8 string.
         '''
+
+        __slots__ = ()
+        sql_type = 'TEXT'
+
         fields = [('value', 's')]
 
         def encode(self):
@@ -1688,6 +1853,9 @@ class nlmsg_atoms(nlmsg_base):
         '''
         Zero-terminated string.
         '''
+
+        __slots__ = ()
+
         # FIXME: move z-string hacks from general decode here?
         fields = [('value', 'z')]
 
@@ -1703,6 +1871,9 @@ class nla(nla_base, nlmsg_atoms):
     '''
     Main NLA class
     '''
+
+    __slots__ = ()
+
     def decode(self):
         nla_base.decode(self)
         del self['header']
@@ -1712,6 +1883,9 @@ class nlmsg(nlmsg_atoms):
     '''
     Main netlink message class
     '''
+
+    __slots__ = ()
+
     header = (('length', 'I'),
               ('type', 'H'),
               ('flags', 'H'),
@@ -1723,6 +1897,9 @@ class genlmsg(nlmsg):
     '''
     Generic netlink message
     '''
+
+    __slots__ = ()
+
     fields = (('cmd', 'B'),
               ('version', 'B'),
               ('reserved', 'H'))
@@ -1732,6 +1909,9 @@ class ctrlmsg(genlmsg):
     '''
     Netlink control message
     '''
+
+    __slots__ = ()
+
     # FIXME: to be extended
     nla_map = (('CTRL_ATTR_UNSPEC', 'none'),
                ('CTRL_ATTR_FAMILY_ID', 'uint16'),
@@ -1743,11 +1923,17 @@ class ctrlmsg(genlmsg):
                ('CTRL_ATTR_MCAST_GROUPS', '*mcast_groups'))
 
     class ops(nla):
+
+        __slots__ = ()
+
         nla_map = (('CTRL_ATTR_OP_UNSPEC', 'none'),
                    ('CTRL_ATTR_OP_ID', 'uint32'),
                    ('CTRL_ATTR_OP_FLAGS', 'uint32'))
 
     class mcast_groups(nla):
+
+        __slots__ = ()
+
         nla_map = (('CTRL_ATTR_MCAST_GRP_UNSPEC', 'none'),
                    ('CTRL_ATTR_MCAST_GRP_NAME', 'asciiz'),
                    ('CTRL_ATTR_MCAST_GRP_ID', 'uint32'))
