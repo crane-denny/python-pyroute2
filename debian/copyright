@@ -1,4 +1,4 @@
-Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: pyroute2
 Upstream-Contact: Peter V. Saveliev <peter@svinota.eu>
 Source: https://pypi.python.org/pypi/pyroute2
