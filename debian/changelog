@@ -1,10 +1,19 @@
-pyroute2 (0.5.2-0.1) UNRELEASED; urgency=medium
+pyroute2 (0.5.2-1) unstable; urgency=medium
 
-  * Non-maintainer upload
-  * New upstream version
+  [ Michal Arbet ]
+  * New upstream version (Closes: #903394)
   * Add nose tests
+  * Use Debian package jQuery
+  * Fix build-depends-on-python-sphinx-only
+  * Adding d/source.lintian-overrides
 
- -- Michal Arbet <michal.arbet@ultimum.io>  Mon, 09 Jul 2018 12:52:47 +0100
+  [ Florian Pelgrim ]
+  * Changed copyright format uri to https
+  * Removed trailing spaces from d/control and d/changelog
+  * Increased debhelper compat to 11
+  * Update lintian override location to d/source/lintian-overrides
+
+ -- Florian Pelgrim <florian.pelgrim@craneworks.de>  Tue, 10 Jul 2018 21:32:31 +0000
 
 pyroute2 (0.4.12-2) unstable; urgency=medium
 
