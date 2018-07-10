@@ -7,3 +7,7 @@ parent = TC_H_ROOT
 class options(nla):
         fields = (('bands', 'i'),
                   ('priomap', '16B'))
+
+
+def get_parameters(kwarg):
+        return kwarg

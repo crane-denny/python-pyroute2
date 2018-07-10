@@ -1,0 +1,10 @@
+<map id="inheritancebd2219997f" name="inheritancebd2219997f">
+<area shape="rect" id="node1" title="Persistent transactional route object" alt="" coords="336,152,427,177"/>
+<area shape="rect" id="node2" title="Utility class that implements common transactional logic." alt="" coords="180,276,288,301"/>
+<area shape="rect" id="node8" title="Objects of this class represent network interface and" alt="" coords="341,251,421,276"/>
+<area shape="rect" id="node16" title="Persistent transactional rule object" alt="" coords="345,349,417,375"/>
+<area shape="rect" id="node3" title="This is a sick&#45;minded hack of dict, intended to be an eye&#45;candy." alt="" coords="31,276,107,301"/>
+<area shape="rect" id="node5" href="ipdb.html#pyroute2.ipdb.main.IPDB" target="_top" title="The class that maintains information about network setup" alt="" coords="33,227,105,252"/>
+<area shape="rect" id="node6" title="LinkedSet child class with different target filter. The" alt="" coords="193,153,275,179"/>
+<area shape="rect" id="node7" title="Utility class, used by `Interface` to track ip addresses" alt="" coords="25,177,112,203"/>
+</map>

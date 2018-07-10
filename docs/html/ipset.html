@@ -1,0 +1,289 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>IPSet module &#8212; pyroute2 0.5.2 documentation</title>
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Netns management overview" href="netns.html" />
+    <link rel="prev" title="WiSet module" href="wiset.html" /> 
+  </head><body>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="netns.html" title="Netns management overview"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="wiset.html" title="WiSet module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
+      </ul>
+        </div>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-pyroute2.ipset">
+<span id="ipset-module"></span><h1>IPSet module<a class="headerlink" href="#module-pyroute2.ipset" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2>IPSet module<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<p>ipset support.</p>
+<p>This module is tested with hash:ip, hash:net, list:set and several
+other ipset structures (like hash:net,iface). There is no guarantee
+that this module is working with all available ipset modules.</p>
+<p>It supports almost all kernel commands (create, destroy, flush,
+rename, swap, test…)</p>
+<dl class="class">
+<dt id="pyroute2.ipset.IPSet">
+<em class="property">class </em><code class="descclassname">pyroute2.ipset.</code><code class="descname">IPSet</code><span class="sig-paren">(</span><em>version=6</em>, <em>attr_revision=None</em>, <em>nfgen_family=2</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet" title="Permalink to this definition">¶</a></dt>
+<dd><p>NFNetlink socket (family=NETLINK_NETFILTER).</p>
+<p>Implements API to the ipset functionality.</p>
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.add">
+<code class="descname">add</code><span class="sig-paren">(</span><em>name</em>, <em>entry</em>, <em>family=2</em>, <em>exclusive=True</em>, <em>comment=None</em>, <em>timeout=None</em>, <em>etype='ip'</em>, <em>skbmark=None</em>, <em>skbprio=None</em>, <em>skbqueue=None</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.add" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a member to the ipset.</p>
+<p>etype is the entry type that you add to the ipset. It’s related to
+the ipset type. For example, use “ip” for one hash:ip or bitmap:ip
+ipset.</p>
+<p>When your ipset store a tuple, like “hash:net,iface”, you must use a
+comma a separator (etype=”net,iface”)</p>
+<p>entry is a string for “ip” and “net” objects. For ipset with several
+dimensions, you must use a tuple (or a list) of objects.</p>
+<p>“port” type is specific, since you can use integer of specialized
+containers like <a class="reference internal" href="#pyroute2.ipset.PortEntry" title="pyroute2.ipset.PortEntry"><code class="xref py py-class docutils literal notranslate"><span class="pre">PortEntry</span></code></a> and <a class="reference internal" href="#pyroute2.ipset.PortRange" title="pyroute2.ipset.PortRange"><code class="xref py py-class docutils literal notranslate"><span class="pre">PortRange</span></code></a></p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ipset</span> <span class="o">=</span> <span class="n">IPSet</span><span class="p">()</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="s2">&quot;hash:ip&quot;</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;198.51.100.1&quot;</span><span class="p">,</span> <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;ip&quot;</span><span class="p">)</span>
+
+<span class="n">ipset</span> <span class="o">=</span> <span class="n">IPSet</span><span class="p">()</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="s2">&quot;bitmap:port&quot;</span><span class="p">,</span>
+             <span class="n">bitmap_ports_range</span><span class="o">=</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">2000</span><span class="p">))</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="mi">1001</span><span class="p">,</span> <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;port&quot;</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="n">PortRange</span><span class="p">(</span><span class="mi">1500</span><span class="p">,</span> <span class="mi">2000</span><span class="p">),</span> <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;port&quot;</span><span class="p">)</span>
+
+<span class="n">ipset</span> <span class="o">=</span> <span class="n">IPSet</span><span class="p">()</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="n">protocol</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">getprotobyname</span><span class="p">(</span><span class="s2">&quot;tcp&quot;</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;foobar&quot;</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="s2">&quot;hash:net,port&quot;</span><span class="p">)</span>
+<span class="n">port_entry</span> <span class="o">=</span> <span class="n">PortEntry</span><span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=</span><span class="n">protocol</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;foobar&quot;</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;198.51.100.0/24&quot;</span><span class="p">,</span> <span class="n">port_entry</span><span class="p">),</span>
+          <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;net,port&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.create">
+<code class="descname">create</code><span class="sig-paren">(</span><em>name</em>, <em>stype='hash:ip'</em>, <em>family=2</em>, <em>exclusive=True</em>, <em>counters=False</em>, <em>comment=False</em>, <em>maxelem=65536</em>, <em>forceadd=False</em>, <em>hashsize=None</em>, <em>timeout=None</em>, <em>bitmap_ports_range=None</em>, <em>size=None</em>, <em>skbinfo=False</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.create" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an ipset <cite>name</cite> of type <cite>stype</cite>, by default
+<cite>hash:ip</cite>.</p>
+<p>Common ipset options are supported:</p>
+<ul class="simple">
+<li>exclusive – if set, raise an error if the ipset exists</li>
+<li>counters – enable data/packets counters</li>
+<li>comment – enable comments capability</li>
+<li>maxelem – max size of the ipset</li>
+<li>forceadd – you should refer to the ipset manpage</li>
+<li>hashsize – size of the hashtable (if any)</li>
+<li>timeout – enable and set a default value for entries (if not None)</li>
+<li><dl class="first docutils">
+<dt>bitmap_ports_range – set the specified inclusive portrange for</dt>
+<dd>the bitmap ipset structure (0, 65536)</dd>
+</dl>
+</li>
+<li>size – Size of the list:set, the default is 8</li>
+<li>skbinfo – enable skbinfo capability</li>
+</ul>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.delete">
+<code class="descname">delete</code><span class="sig-paren">(</span><em>name</em>, <em>entry</em>, <em>family=2</em>, <em>exclusive=True</em>, <em>etype='ip'</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete a member from the ipset.</p>
+<p>See <a class="reference internal" href="#pyroute2.ipset.IPSet.add" title="pyroute2.ipset.IPSet.add"><code class="xref py py-func docutils literal notranslate"><span class="pre">add()</span></code></a> method for more information on etype.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.destroy">
+<code class="descname">destroy</code><span class="sig-paren">(</span><em>name=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.destroy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Destroy one (when name is set) or all ipset (when name is None)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.flush">
+<code class="descname">flush</code><span class="sig-paren">(</span><em>name=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.flush" title="Permalink to this definition">¶</a></dt>
+<dd><p>Flush all ipsets. When name is set, flush only this ipset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.get_supported_revisions">
+<code class="descname">get_supported_revisions</code><span class="sig-paren">(</span><em>stype</em>, <em>family=2</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.get_supported_revisions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return minimum and maximum of revisions supported by the kernel.</p>
+<p>Each ipset module (like hash:net, hash:ip, etc) has several
+revisions. Newer revisions often have more features or more
+performances. Thanks to this call, you can ask the kernel
+the list of supported revisions.</p>
+<p>You can manually set/force revisions used in IPSet constructor.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ipset</span> <span class="o">=</span> <span class="n">IPSet</span><span class="p">()</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">get_supported_revisions</span><span class="p">(</span><span class="s2">&quot;hash:net&quot;</span><span class="p">)</span>
+
+<span class="n">ipset</span><span class="o">.</span><span class="n">get_supported_revisions</span><span class="p">(</span><span class="s2">&quot;hash:net,port,net&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.headers">
+<code class="descname">headers</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.headers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get headers of the named ipset. It can be used to test if one ipset
+exists, since it returns a no such file or directory.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.list">
+<code class="descname">list</code><span class="sig-paren">(</span><em>*argv</em>, <em>**kwarg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.list" title="Permalink to this definition">¶</a></dt>
+<dd><p>List installed ipsets. If <cite>name</cite> is provided, list
+the named ipset or return an empty list.</p>
+<p>Be warned: netlink does not return an error if given name does not
+exit, you will receive an empty list.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.rename">
+<code class="descname">rename</code><span class="sig-paren">(</span><em>name_src</em>, <em>name_dst</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.rename" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rename the ipset.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.swap">
+<code class="descname">swap</code><span class="sig-paren">(</span><em>set_a</em>, <em>set_b</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.swap" title="Permalink to this definition">¶</a></dt>
+<dd><p>Swap two ipsets. They must have compatible content type.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.ipset.IPSet.test">
+<code class="descname">test</code><span class="sig-paren">(</span><em>name</em>, <em>entry</em>, <em>family=2</em>, <em>etype='ip'</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.IPSet.test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test if entry is part of an ipset</p>
+<p>See <a class="reference internal" href="#pyroute2.ipset.IPSet.add" title="pyroute2.ipset.IPSet.add"><code class="xref py py-func docutils literal notranslate"><span class="pre">add()</span></code></a> method for more information on etype.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.ipset.PortEntry">
+<em class="property">class </em><code class="descclassname">pyroute2.ipset.</code><code class="descname">PortEntry</code><span class="sig-paren">(</span><em>port</em>, <em>protocol=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.PortEntry" title="Permalink to this definition">¶</a></dt>
+<dd><p>A simple container for port entry with optional protocol</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.ipset.PortRange">
+<em class="property">class </em><code class="descclassname">pyroute2.ipset.</code><code class="descname">PortRange</code><span class="sig-paren">(</span><em>begin</em>, <em>end</em>, <em>protocol=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.ipset.PortRange" title="Permalink to this definition">¶</a></dt>
+<dd><p>A simple container for port range with optional protocol</p>
+<p>Note that optional protocol parameter is not supported by all
+kernel ipset modules using ports. On the other hand, it’s sometimes
+mandatory to set it (like for hash:net,port ipsets)</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">udp_proto</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">getprotobyname</span><span class="p">(</span><span class="s2">&quot;udp&quot;</span><span class="p">)</span>
+<span class="n">port_range</span> <span class="o">=</span> <span class="n">PortRange</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">2000</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=</span><span class="n">udp_proto</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="n">stype</span><span class="o">=</span><span class="s2">&quot;hash:net,port&quot;</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;192.0.2.0/24&quot;</span><span class="p">,</span> <span class="n">port_range</span><span class="p">),</span> <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;net,port&quot;</span><span class="p">)</span>
+<span class="n">ipset</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;192.0.2.0/24&quot;</span><span class="p">,</span> <span class="n">port_range</span><span class="p">),</span> <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;net,port&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">IPSet module</a><ul>
+<li><a class="reference internal" href="#id1">IPSet module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="wiset.html"
+                        title="previous chapter">WiSet module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="netns.html"
+                        title="next chapter">Netns management overview</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/ipset.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="netns.html" title="Netns management overview"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="wiset.html" title="WiSet module"
+             >previous</a> |</li>
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.7.2.
+    </div>
+  </body>
+</html>

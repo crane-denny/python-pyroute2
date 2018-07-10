@@ -130,6 +130,7 @@ Submit changes
 Please do not hesitate to submit the changes on github. Without
 your patches this module will not evolve.
 '''
+import logging
 from pyroute2.netlink import NLM_F_ACK
 from pyroute2.netlink import NLM_F_REQUEST
 from pyroute2.netlink import NLM_F_DUMP
@@ -139,6 +140,9 @@ from pyroute2.netlink.nl80211 import NL80211_NAMES
 from pyroute2.netlink.nl80211 import IFTYPE_NAMES
 from pyroute2.netlink.nl80211 import CHAN_WIDTH
 from pyroute2.netlink.nl80211 import BSS_STATUS_NAMES
+from pyroute2.netlink.nl80211 import SCAN_FLAGS_NAMES
+
+log = logging.getLogger(__name__)
 
 
 class IW(NL80211):
@@ -153,21 +157,28 @@ class IW(NL80211):
 
         # get specific async kwarg
         if 'async' in kwarg:
-            async = kwarg['async']
-            del kwarg['async']
-        else:
-            async = False
+            # FIXME
+            # raise deprecation error after 0.5.3
+            #
+            log.warning('use "async_cache" instead of "async", '
+                        '"async" is a keyword from Python 3.7')
+            kwarg['async_cache'] = kwarg.pop('async')
 
-        # align groups with async
+        if 'async_cache' in kwarg:
+            async_cache = kwarg.pop('async_cache')
+        else:
+            async_cache = False
+
+        # align groups with async_cache
         if groups is None:
-            groups = ~0 if async else 0
+            groups = ~0 if async_cache else 0
 
         # continue with init
         super(IW, self).__init__(*argv, **kwarg)
 
         # do automatic bind
         # FIXME: unfortunately we can not omit it here
-        self.bind(groups, async)
+        self.bind(groups, async_cache=async_cache)
 
     def del_interface(self, dev):
         '''
@@ -246,10 +257,7 @@ class IW(NL80211):
         return 'phy%i' % attr.get_attr('NL80211_ATTR_WIPHY')
 
     def _get_frequency(self, attr):
-        try:
-            return attr.get_attr('NL80211_ATTR_WIPHY_FREQ')
-        except:
-            return 0
+        return attr.get_attr('NL80211_ATTR_WIPHY_FREQ') or 0
 
     def get_interfaces_dict(self):
         '''
@@ -378,6 +386,76 @@ class IW(NL80211):
                          msg_type=self.prid,
                          msg_flags=NLM_F_REQUEST | NLM_F_ACK)
 
+    def authenticate(self, ifindex, bssid, ssid, freq, auth_type=0):
+
+        '''
+        Send an Authentication management frame.
+        '''
+
+        msg = nl80211cmd()
+        msg['cmd'] = NL80211_NAMES['NL80211_CMD_AUTHENTICATE']
+        msg['attrs'] = [['NL80211_ATTR_IFINDEX', ifindex],
+                        ['NL80211_ATTR_MAC', bssid],
+                        ['NL80211_ATTR_SSID', ssid],
+                        ['NL80211_ATTR_WIPHY_FREQ', freq],
+                        ['NL80211_ATTR_AUTH_TYPE', auth_type]]
+
+        self.nlm_request(msg,
+                         msg_type=self.prid,
+                         msg_flags=NLM_F_REQUEST | NLM_F_ACK)
+
+    def deauthenticate(self, ifindex, bssid, reason_code=0x01):
+
+        '''
+        Send a Deauthentication management frame.
+        '''
+
+        msg = nl80211cmd()
+        msg['cmd'] = NL80211_NAMES['NL80211_CMD_DEAUTHENTICATE']
+        msg['attrs'] = [['NL80211_ATTR_IFINDEX', ifindex],
+                        ['NL80211_ATTR_MAC', bssid],
+                        ['NL80211_ATTR_REASON_CODE', reason_code]]
+
+        self.nlm_request(msg,
+                         msg_type=self.prid,
+                         msg_flags=NLM_F_REQUEST | NLM_F_ACK)
+
+    def associate(self, ifindex, bssid, ssid, freq, info_elements=None):
+
+        '''
+        Send an Association request frame.
+        '''
+
+        msg = nl80211cmd()
+        msg['cmd'] = NL80211_NAMES['NL80211_CMD_ASSOCIATE']
+        msg['attrs'] = [['NL80211_ATTR_IFINDEX', ifindex],
+                        ['NL80211_ATTR_MAC', bssid],
+                        ['NL80211_ATTR_SSID', ssid],
+                        ['NL80211_ATTR_WIPHY_FREQ', freq]]
+
+        if info_elements is not None:
+            msg['attrs'].append(['NL80211_ATTR_IE', info_elements])
+
+        self.nlm_request(msg,
+                         msg_type=self.prid,
+                         msg_flags=NLM_F_REQUEST | NLM_F_ACK)
+
+    def disassociate(self, ifindex, bssid, reason_code=0x03):
+
+        '''
+        Send a Disassociation management frame.
+        '''
+
+        msg = nl80211cmd()
+        msg['cmd'] = NL80211_NAMES['NL80211_CMD_DISASSOCIATE']
+        msg['attrs'] = [['NL80211_ATTR_IFINDEX', ifindex],
+                        ['NL80211_ATTR_MAC', bssid],
+                        ['NL80211_ATTR_REASON_CODE', reason_code]]
+
+        self.nlm_request(msg,
+                         msg_type=self.prid,
+                         msg_flags=NLM_F_REQUEST | NLM_F_ACK)
+
     def connect(self, ifindex, ssid, bssid=None):
         '''
         Connect to the ap with ssid and bssid
@@ -404,7 +482,7 @@ class IW(NL80211):
                          msg_type=self.prid,
                          msg_flags=NLM_F_REQUEST | NLM_F_ACK)
 
-    def scan(self, ifindex):
+    def scan(self, ifindex, ssids=None, flush_cache=False):
         '''
         Trigger scan and get results.
 
@@ -422,6 +500,18 @@ class IW(NL80211):
         msg = nl80211cmd()
         msg['cmd'] = NL80211_NAMES['NL80211_CMD_TRIGGER_SCAN']
         msg['attrs'] = [['NL80211_ATTR_IFINDEX', ifindex]]
+
+        # If a list of SSIDs is provided, active scanning should be performed
+        if ssids is not None:
+            if isinstance(ssids, list):
+                msg['attrs'].append(['NL80211_ATTR_SCAN_SSIDS', ssids])
+
+        scan_flags = 0
+        if flush_cache:
+            # Flush the cache before scanning
+            scan_flags |= SCAN_FLAGS_NAMES['NL80211_SCAN_FLAG_FLUSH']
+            msg['attrs'].append(['NL80211_ATTR_SCAN_FLAGS', scan_flags])
+
         self.nlm_request(msg,
                          msg_type=self.prid,
                          msg_flags=NLM_F_REQUEST | NLM_F_ACK)

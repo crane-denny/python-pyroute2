@@ -1,0 +1,368 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>WiSet module &#8212; pyroute2 0.5.2 documentation</title>
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="IPSet module" href="ipset.html" />
+    <link rel="prev" title="IPDB module" href="ipdb.html" /> 
+  </head><body>
+
+    <div class="related" role="navigation" aria-label="related navigation">
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="ipset.html" title="IPSet module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="ipdb.html" title="IPDB module"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
+      </ul>
+        </div>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="module-pyroute2.wiset">
+<span id="wiset-module"></span><h1>WiSet module<a class="headerlink" href="#module-pyroute2.wiset" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="id1">
+<h2>WiSet module<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<p>High level ipset support.</p>
+<p>When <a class="reference internal" href="ipset.html"><span class="doc">IPSet module</span></a> is providing a direct netlink socket with low level
+functions, a <a class="reference internal" href="#pyroute2.wiset.WiSet" title="pyroute2.wiset.WiSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">WiSet</span></code></a> object is built to map ipset objects from kernel.
+It helps to add/remove entries, list content, etc.</p>
+<p>For example, adding an entry with <a class="reference internal" href="ipset.html#pyroute2.ipset.IPSet" title="pyroute2.ipset.IPSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">pyroute2.ipset.IPSet</span></code></a> object
+implies to set a various number of parameters:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ipset</span> <span class="o">=</span> <span class="n">IPSet</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ipset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;1.2.3.4/24&quot;</span><span class="p">,</span> <span class="n">etype</span><span class="o">=</span><span class="s2">&quot;net&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ipset</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>When they are discovered by a <a class="reference internal" href="#pyroute2.wiset.WiSet" title="pyroute2.wiset.WiSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">WiSet</span></code></a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">wiset</span> <span class="o">=</span> <span class="n">load_ipset</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">wiset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;1.2.3.4/24&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Listing entries is also easier using <a class="reference internal" href="#pyroute2.wiset.WiSet" title="pyroute2.wiset.WiSet"><code class="xref py py-class docutils literal notranslate"><span class="pre">WiSet</span></code></a>, since it parses for you
+netlink messages:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">wiset</span><span class="o">.</span><span class="n">content</span>
+<span class="go">{&#39;1.2.3.0/24&#39;: IPStats(packets=None, bytes=None, comment=None, timeout=None)}</span>
+</pre></div>
+</div>
+<dl class="class">
+<dt id="pyroute2.wiset.IPStats">
+<em class="property">class </em><code class="descclassname">pyroute2.wiset.</code><code class="descname">IPStats</code><span class="sig-paren">(</span><em>packets</em>, <em>bytes</em>, <em>comment</em>, <em>timeout</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.IPStats" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="attribute">
+<dt id="pyroute2.wiset.IPStats.bytes">
+<code class="descname">bytes</code><a class="headerlink" href="#pyroute2.wiset.IPStats.bytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 1</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyroute2.wiset.IPStats.comment">
+<code class="descname">comment</code><a class="headerlink" href="#pyroute2.wiset.IPStats.comment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 2</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyroute2.wiset.IPStats.packets">
+<code class="descname">packets</code><a class="headerlink" href="#pyroute2.wiset.IPStats.packets" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 0</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyroute2.wiset.IPStats.timeout">
+<code class="descname">timeout</code><a class="headerlink" href="#pyroute2.wiset.IPStats.timeout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 3</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pyroute2.wiset.WiSet">
+<em class="property">class </em><code class="descclassname">pyroute2.wiset.</code><code class="descname">WiSet</code><span class="sig-paren">(</span><em>name=None</em>, <em>attr_type='hash:ip'</em>, <em>family=2</em>, <em>sock=None</em>, <em>timeout=None</em>, <em>counters=False</em>, <em>comment=False</em>, <em>hashsize=None</em>, <em>revision=None</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet" title="Permalink to this definition">¶</a></dt>
+<dd><p>Main high level ipset manipulation class.</p>
+<p>Every high level ipset operation should be possible with this class,
+you probably don’t need other helpers of this module, except tools
+to load data from kernel (<code class="xref py py-func docutils literal notranslate"><span class="pre">load_all_ipsets()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">load_ipset()</span></code>)</p>
+<p>For example, you can create and an entry in a ipset just with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">WiSet</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mysuperipset&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">myset</span><span class="p">:</span>
+<span class="gp">&gt;&gt;&gt; </span>   <span class="n">myset</span><span class="o">.</span><span class="n">create</span><span class="p">()</span>             <span class="c1"># add the ipset in the kernel</span>
+<span class="gp">&gt;&gt;&gt; </span>   <span class="n">myset</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;198.51.100.1&quot;</span><span class="p">)</span>  <span class="c1"># add one IP to the set</span>
+</pre></div>
+</div>
+<p>Netlink sockets are opened by __enter__ and __exit__ function, so you don’t
+have to manage it manually if you use the “with” keyword.</p>
+<p>If you want to manage it manually (for example for long operation in
+a daemon), you can do the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">myset</span> <span class="o">=</span> <span class="n">WiSet</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mysuperipset&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">myset</span><span class="o">.</span><span class="n">open_netlink</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># do stuff</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">myset</span><span class="o">.</span><span class="n">close_netlink</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>You can also don’t initiate at all any netlink socket, this code will work:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">myset</span> <span class="o">=</span> <span class="n">WiSet</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mysuperipset&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">myset</span><span class="o">.</span><span class="n">create</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">myset</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>But do it very carefully. In that case, a netlink socket will be opened
+in background for any operation. No socket will be leaked, but that
+can consume resources.</p>
+<p>You can also instantiate WiSet objects with <code class="xref py py-func docutils literal notranslate"><span class="pre">load_all_ipsets()</span></code> and
+<code class="xref py py-func docutils literal notranslate"><span class="pre">load_ipset()</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">all_sets_dict</span> <span class="o">=</span> <span class="n">load_all_ipsets</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">one_set</span> <span class="o">=</span> <span class="n">load_ipset</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;myset&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Have a look on content variable if you need list of entries in the Set.</p>
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.add">
+<code class="descname">add</code><span class="sig-paren">(</span><em>entry</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.add" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add an entry in this ipset.</p>
+<p>If counters are enabled on the set, reset by default the value when
+we add the element. Without this reset, kernel sometimes store old
+values and can add very strange behavior on counters.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.close_netlink">
+<code class="descname">close_netlink</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.close_netlink" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clone any opened netlink socket</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pyroute2.wiset.WiSet.content">
+<code class="descname">content</code><a class="headerlink" href="#pyroute2.wiset.WiSet.content" title="Permalink to this definition">¶</a></dt>
+<dd><p>Dictionary of entries in the set.</p>
+<p>Keys are IP addresses (as string), values are IPStats tuples.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.create">
+<code class="descname">create</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.create" title="Permalink to this definition">¶</a></dt>
+<dd><p>Insert this Set in the kernel</p>
+<p>Many options are set with python object attributes (like comments,
+counters, etc). For non-supported type, kwargs are provided. See
+<a class="reference internal" href="ipset.html"><span class="doc">IPSet module</span></a> documentation for more information.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.delete">
+<code class="descname">delete</code><span class="sig-paren">(</span><em>entry</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.delete" title="Permalink to this definition">¶</a></dt>
+<dd><p>Delete/remove an entry in this ipset</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.destroy">
+<code class="descname">destroy</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.destroy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Destroy this ipset in the kernel list.</p>
+<p>It does not delete this python object (any content or other stored
+values are keep in memory). This function will fail if the ipset is
+still referenced (by example in iptables rules), you have been warned.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.flush">
+<code class="descname">flush</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.flush" title="Permalink to this definition">¶</a></dt>
+<dd><p>Flush entries of the ipset</p>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="pyroute2.wiset.WiSet.from_netlink">
+<em class="property">classmethod </em><code class="descname">from_netlink</code><span class="sig-paren">(</span><em>ndmsg</em>, <em>content=False</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.from_netlink" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a ipset objects based on a parsed netlink message</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>ndmsg</strong> – the netlink message to parse</li>
+<li><strong>content</strong> (<em>bool</em>) – should we fill (and parse) entries info (can be slow
+on very large set)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.insert_list">
+<code class="descname">insert_list</code><span class="sig-paren">(</span><em>entries</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.insert_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>Just a small helper to reduce the number of loops in main code.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.open_netlink">
+<code class="descname">open_netlink</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.open_netlink" title="Permalink to this definition">¶</a></dt>
+<dd><p>Open manually a netlink socket. You can use “with WiSet()” instead</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.replace_entries">
+<code class="descname">replace_entries</code><span class="sig-paren">(</span><em>new_list</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.replace_entries" title="Permalink to this definition">¶</a></dt>
+<dd><p>Replace the content of an ipset with a new list of entries.</p>
+<p>This operation is like a flush() and adding all entries one by one. But
+this call is atomic: it creates a temporary ipset and swap the content.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>new_list</strong> (list or <code class="xref py py-class docutils literal notranslate"><span class="pre">set</span></code>) – list of entries to add</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.test">
+<code class="descname">test</code><span class="sig-paren">(</span><em>entry</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test if an entry is in this ipset</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.test_list">
+<code class="descname">test_list</code><span class="sig-paren">(</span><em>entries</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.test_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test if a list of a set of entries is in this ipset</p>
+<p>Return a set of entries found in the IPSet</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.update_content">
+<code class="descname">update_content</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.update_content" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update the content dictionary with values from kernel</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pyroute2.wiset.WiSet.update_dict_content">
+<code class="descname">update_dict_content</code><span class="sig-paren">(</span><em>ndmsg</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.WiSet.update_dict_content" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update a dictionary statistics with values sent in netlink message</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ndmsg</strong> (<em>netlink message</em>) – the netlink message</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="pyroute2.wiset.get_ipset_socket">
+<code class="descclassname">pyroute2.wiset.</code><code class="descname">get_ipset_socket</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.get_ipset_socket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a socket that one can pass to several WiSet objects</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="pyroute2.wiset.need_ipset_socket">
+<code class="descclassname">pyroute2.wiset.</code><code class="descname">need_ipset_socket</code><span class="sig-paren">(</span><em>fun</em><span class="sig-paren">)</span><a class="headerlink" href="#pyroute2.wiset.need_ipset_socket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decorator to create netlink socket if needed.</p>
+<p>In many of our helpers, we need to open a netlink socket. This can
+be expensive for someone using many times the functions: instead to have
+only one socket and use several requests, we will open it again and again.</p>
+<p>This helper allow our functions to be flexible: the caller can pass an
+optional socket, or do nothing. In this last case, this decorator
+will open a socket for the caller (and close it after call)</p>
+<p>It also help to mix helpers. One helper can call another one: the socket
+will be opened only once. We just have to pass the ipset variable.</p>
+<p>Note that all functions using this helper <em>must</em> use ipset as variable
+name for the socket.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">WiSet module</a><ul>
+<li><a class="reference internal" href="#id1">WiSet module</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="ipdb.html"
+                        title="previous chapter">IPDB module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="ipset.html"
+                        title="next chapter">IPSet module</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/wiset.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="ipset.html" title="IPSet module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="ipdb.html" title="IPDB module"
+             >previous</a> |</li>
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2013, Peter V. Saveliev.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.7.2.
+    </div>
+  </body>
+</html>

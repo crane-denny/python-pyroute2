@@ -1,6 +1,11 @@
 #!/usr/bin/make -f
 
 export PYBUILD_NAME=pyroute2
+export PYBUILD_BEFORE_TEST=cp -r {dir}/tests {build_dir}/
+export PYBUILD_AFTER_TEST=rm -rf {build_dir}/tests
+export PYBUILD_TEST_ARGS=tests/unit
+export PYBUILD_TEST_NOSE=1
+
 %:
 	dh $@ --with python2,python3 --buildsystem=pybuild
 

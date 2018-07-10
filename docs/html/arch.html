@@ -1,37 +1,26 @@
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    
-    <title>Module architecture &#8212; pyroute2 0.4.12 documentation</title>
-    
+    <title>Module architecture &#8212; pyroute2 0.5.2 documentation</title>
     <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    
-    <script type="text/javascript">
-      var DOCUMENTATION_OPTIONS = {
-        URL_ROOT:    './',
-        VERSION:     '0.4.12',
-        COLLAPSE_INDEX: false,
-        FILE_SUFFIX: '.html',
-        HAS_SOURCE:  true
-      };
-    </script>
+    <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="top" title="pyroute2 0.4.12 documentation" href="index.html" />
     <link rel="next" title="Netlink" href="netlink.html" />
     <link rel="prev" title="Project contribution guide" href="devcontribute.html" /> 
-  </head>
-  <body role="document">
+  </head><body>
+
     <div class="related" role="navigation" aria-label="related navigation">
-      <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
           <a href="genindex.html" title="General Index"
@@ -45,9 +34,11 @@
         <li class="right" >
           <a href="devcontribute.html" title="Project contribution guide"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
       </ul>
-    </div>  
+        </div>
+  
 
     <div class="document">
       <div class="documentwrapper">
@@ -71,25 +62,23 @@ with <cite>fileno()</cite>, <cite>recv()</cite>, <cite>sendto()</cite> etc. Of c
 can use it in <cite>poll()</cite>.</p>
 <p>There is an inheritance diagram of netlink sockets, provided
 by the library:</p>
-<img src="_images/inheritance-f66e473c49f615627cbf040680338f04db639d10.png" alt="Inheritance diagram of pyroute2.iproute.IPRoute, pyroute2.iproute.IPBatch, pyroute2.iproute.RawIPRoute, pyroute2.iwutil.IW, pyroute2.ipset.IPSet, pyroute2.netlink.taskstats.TaskStats, pyroute2.netlink.ipq.IPQSocket, pyroute2.remote.Client, pyroute2.remote.RemoteSocket, pyroute2.remote.Remote, pyroute2.netns.nslink.NetNS" usemap="#inheritanceea7518f0a0" class="inheritance"/>
-<map id="inheritanceea7518f0a0" name="inheritanceea7518f0a0">
-<area shape="rect" id="node2" href="nlsocket.html#pyroute2.netlink.nlsocket.NetlinkMixin" target="_top" title="Generic netlink socket" alt="" coords="5,153,104,178"/>
-<area shape="rect" id="node4" title="Low&#45;level socket interface. Provides all the" alt="" coords="342,55,500,80"/>
-<area shape="rect" id="node10" title="Low&#45;level socket interface. Provides all the" alt="" coords="378,252,465,277"/>
-<area shape="rect" id="node11" title="The simplest class, that connects together the netlink parser and" alt="" coords="379,104,464,129"/>
-<area shape="rect" id="node13" href="devmodules.html#pyroute2.ipset.IPSet" target="_top" title="NFNetlink socket (family=NETLINK_NETFILTER)." alt="" coords="385,153,457,178"/>
-<area shape="rect" id="node6" href="iproute.html#pyroute2.iproute.IPBatch" target="_top" title="Netlink requests compiler. Does not send any requests, but" alt="" coords="560,5,632,31"/>
-<area shape="rect" id="node7" href="iproute.html#pyroute2.iproute.IPRouteMixin" target="_top" title="`IPRouteMixin` should not be instantiated by itself. It is intended" alt="" coords="371,202,472,228"/>
-<area shape="rect" id="node12" href="iproute.html#pyroute2.iproute.IPRoute" target="_top" title="Public class that provides RTNL API to the current network" alt="" coords="560,157,632,182"/>
-<area shape="rect" id="node16" href="netns.html#pyroute2.netns.nslink.NetNS" target="_top" title="NetNS is the IPRoute API with network namespace support." alt="" coords="560,347,632,373"/>
-<area shape="rect" id="node20" href="iproute.html#pyroute2.iproute.RawIPRoute" target="_top" title="The same as `IPRoute`, but does not use the netlink proxy." alt="" coords="548,230,643,256"/>
-<area shape="rect" id="node21" title="Experimental TCP server." alt="" coords="560,291,632,317"/>
-</map>
-<div class="section" id="under-the-hood">
+<img src="_images/inheritance-b371595536f26977d305f588923fda189045a051.png" alt="Inheritance diagram of pyroute2.iproute.linux.IPRoute, pyroute2.iproute.linux.IPBatch, pyroute2.iproute.linux.RawIPRoute, pyroute2.iwutil.IW, pyroute2.ipset.IPSet, pyroute2.netlink.taskstats.TaskStats, pyroute2.netlink.ipq.IPQSocket, pyroute2.remote.Client, pyroute2.remote.RemoteSocket, pyroute2.remote.shell.ShellIPR, pyroute2.netns.nslink.NetNS" usemap="#inheritancec409297746" class="inheritance"/>
+<map id="inheritancec409297746" name="inheritancec409297746">
+<area shape="rect" id="node1" href="nlsocket.html#pyroute2.netlink.nlsocket.BatchSocket" target="_top" title="BatchSocket" alt="" coords="176,18,276,43"/>
+<area shape="rect" id="node2" href="nlsocket.html#pyroute2.netlink.nlsocket.NetlinkMixin" target="_top" title="Generic netlink socket" alt="" coords="5,149,106,174"/>
+<area shape="rect" id="node5" href="nlsocket.html#pyroute2.netlink.nlsocket.NetlinkSocket" target="_top" title="NetlinkSocket" alt="" coords="171,149,281,174"/>
+<area shape="rect" id="node13" href="ipset.html#pyroute2.ipset.IPSet" target="_top" title="NFNetlink socket (family=NETLINK_NETFILTER)." alt="" coords="390,149,460,174"/>
+<area shape="rect" id="node6" href="iproute.html#pyroute2.iproute.linux.IPBatch" target="_top" title="Netlink requests compiler. Does not send any requests, but" alt="" coords="563,5,633,30"/>
+<area shape="rect" id="node7" href="iproute.html#pyroute2.iproute.linux.RTNL_API" target="_top" title="`RTNL_API` should not be instantiated by itself. It is intended" alt="" coords="385,197,465,221"/>
+<area shape="rect" id="node12" href="iproute.html#pyroute2.iproute.linux.IPRoute" target="_top" title="Regular ordinary utility class, see RTNL API for the list of methods." alt="" coords="563,152,633,176"/>
+<area shape="rect" id="node16" href="netns.html#pyroute2.netns.nslink.NetNS" target="_top" title="NetNS is the IPRoute API with network namespace support." alt="" coords="563,337,633,361"/>
+<area shape="rect" id="node20" href="iproute.html#pyroute2.iproute.linux.RawIPRoute" target="_top" title="The same as `IPRoute`, but does not use the netlink proxy." alt="" coords="550,206,646,231"/>
+<area shape="rect" id="node14" href="devmodules.html#pyroute2.iwutil.IW" target="_top" title="IW" alt="" coords="693,101,763,126"/>
+</map><div class="section" id="under-the-hood">
 <h3>under the hood<a class="headerlink" href="#under-the-hood" title="Permalink to this headline">¶</a></h3>
-<p>Let&#8217;s assume we use an <cite>IPRoute</cite> object to get the
+<p>Let’s assume we use an <cite>IPRoute</cite> object to get the
 interface list of the system:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pyroute2</span> <span class="k">import</span> <span class="n">IPRoute</span>
 <span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
 <span class="n">ipr</span><span class="o">.</span><span class="n">get_links</span><span class="p">()</span>
 <span class="n">ipr</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -98,14 +87,14 @@ interface list of the system:</p>
 <p>The <cite>get_links()</cite> method is provided by the <cite>IPRouteMixin</cite>
 class. It chooses the message to send (<cite>ifinfmsg</cite>), prepares
 required fields and passes it to the next layer:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">result</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nlm_request</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">RTM_GETLINK</span><span class="p">,</span> <span class="n">msg_flags</span><span class="p">))</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">result</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nlm_request</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">RTM_GETLINK</span><span class="p">,</span> <span class="n">msg_flags</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>The <cite>nlm_request()</cite> is a method of the <cite>NetlinkMixin</cite> class.
 It wraps the pair request/response in one method. The request
 is done via <cite>put()</cite>, response comes with <cite>get()</cite>. These
 methods hide under the hood the asynchronous nature of the
-netlink protocol, where the response can come whenever &#8211;
+netlink protocol, where the response can come whenever –
 the time and packet order are not guaranteed. But one can
 use the <cite>sequence_number</cite> field of a netlink message to
 match responses, and the pair <cite>put()/get()</cite> does it.</p>
@@ -116,13 +105,13 @@ match responses, and the pair <cite>put()/get()</cite> does it.</p>
 and parse them only when there is time for that. For that
 case the <cite>NetlinkMixin</cite> provides a possibility to start a
 dedicated cache thread, that will collect and queue incoming
-messages as they arrive. The thread doesn&#8217;t affect the
+messages as they arrive. The thread doesn’t affect the
 socket behaviour: it will behave exactly in the same way,
 the only difference is that <cite>recv()</cite> will return already
 cached in the userspace message. To start the thread,
-one should call <cite>bind()</cite> with <cite>async=True</cite>:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
-<span class="n">ipr</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="k">async</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+one should call <cite>bind()</cite> with <cite>async_cache=True</cite>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ipr</span> <span class="o">=</span> <span class="n">IPRoute</span><span class="p">()</span>
+<span class="n">ipr</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">async_cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="o">...</span>  <span class="c1"># do some stuff</span>
 <span class="n">ipr</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
@@ -143,7 +132,7 @@ verdict can be:</p>
 </ul>
 </div></blockquote>
 <p>E.g.:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">msg</span> <span class="o">=</span> <span class="n">ifinfmsg</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">msg</span> <span class="o">=</span> <span class="n">ifinfmsg</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 <span class="n">msg</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
 <span class="o">...</span>  <span class="c1"># mangle msg</span>
 <span class="n">msg</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
@@ -180,28 +169,19 @@ type, one should inherit:</p>
 </ul>
 </div></blockquote>
 <p>The messages hierarchy:</p>
-<img src="_images/inheritance-1b61b1d695b136c0b4dba77340f6c0b30d905d0d.png" alt="Inheritance diagram of pyroute2.netlink.rtnl.ndmsg.ndmsg, pyroute2.netlink.rtnl.tcmsg.tcmsg, pyroute2.netlink.rtnl.rtmsg.rtmsg, pyroute2.netlink.rtnl.fibmsg.fibmsg, pyroute2.netlink.rtnl.ifaddrmsg.ifaddrmsg, pyroute2.netlink.rtnl.ifinfmsg.ifinfmsg, pyroute2.netlink.rtnl.ifinfmsg.ifinfveth, pyroute2.netlink.taskstats.taskstatsmsg, pyroute2.netlink.taskstats.tcmd, pyroute2.netlink.ctrlmsg, pyroute2.netlink.nl80211.nl80211cmd, pyroute2.netlink.nfnetlink.ipset.ipset_msg, pyroute2.netlink.ipq.ipq_mode_msg, pyroute2.netlink.ipq.ipq_packet_msg, pyroute2.netlink.ipq.ipq_verdict_msg" usemap="#inheritance6944cdc46b" class="inheritance"/>
-<map id="inheritance6944cdc46b" name="inheritance6944cdc46b">
-<area shape="rect" id="node1" title="Netlink control message" alt="" coords="651,19,723,44"/>
-<area shape="rect" id="node2" title="Generic netlink message" alt="" coords="477,104,555,129"/>
-<area shape="rect" id="node3" title="IP rule message" alt="" coords="480,153,552,179"/>
-<area shape="rect" id="node4" title="Main netlink message class" alt="" coords="323,252,395,277"/>
-<area shape="rect" id="node5" title="IP address information" alt="" coords="473,203,559,228"/>
-<area shape="rect" id="node16" title="ARP cache update message" alt="" coords="480,400,552,425"/>
-<area shape="rect" id="node6" title="Network interface message." alt="" coords="321,55,396,80"/>
-<area shape="rect" id="node9" title="Main NLA class" alt="" coords="323,5,395,31"/>
-<area shape="rect" id="node14" title="Since the support just begins to be developed," alt="" coords="643,351,731,376"/>
-<area shape="rect" id="node18" title="The NLA base class. Use `nla_header` class as the header." alt="" coords="167,5,246,31"/>
-<area shape="rect" id="node19" title="A collection of base NLA types" alt="" coords="152,55,261,80"/>
-<area shape="rect" id="node20" title="Netlink base class. You do not need to inherit it directly, unless" alt="" coords="5,31,104,56"/>
-<area shape="rect" id="node22" title="Route message" alt="" coords="309,499,408,524"/>
-</map>
+<img src="_images/inheritance-e3c5704fb116d5e1ca6c2d8505ff63c892fa04f2.png" alt="Inheritance diagram of pyroute2.netlink.rtnl.ndmsg.ndmsg, pyroute2.netlink.rtnl.tcmsg.tcmsg, pyroute2.netlink.rtnl.rtmsg.rtmsg, pyroute2.netlink.rtnl.fibmsg.fibmsg, pyroute2.netlink.rtnl.ifaddrmsg.ifaddrmsg, pyroute2.netlink.rtnl.ifinfmsg.ifinfmsg, pyroute2.netlink.rtnl.ifinfmsg.ifinfveth, pyroute2.netlink.taskstats.taskstatsmsg, pyroute2.netlink.taskstats.tcmd, pyroute2.netlink.ctrlmsg, pyroute2.netlink.nl80211.nl80211cmd, pyroute2.netlink.nfnetlink.ipset.ipset_msg, pyroute2.netlink.ipq.ipq_mode_msg, pyroute2.netlink.ipq.ipq_packet_msg, pyroute2.netlink.ipq.ipq_verdict_msg" class="inheritance"/>
+</div>
+<div class="section" id="pf-route-messages">
+<h2>PF_ROUTE messages<a class="headerlink" href="#pf-route-messages" title="Permalink to this headline">¶</a></h2>
+<p>PF_ROUTE socket is used to receive notifications from the BSD
+kernel. The PF_ROUTE messages:</p>
+<img src="_images/inheritance-3f838403cee8909e49dd6d8f69421e420ada5b44.png" alt="Inheritance diagram of pyroute2.bsd.pf_route.freebsd.bsdmsg, pyroute2.bsd.pf_route.freebsd.if_msg, pyroute2.bsd.pf_route.freebsd.rt_msg_base, pyroute2.bsd.pf_route.freebsd.ifa_msg_base, pyroute2.bsd.pf_route.freebsd.ifma_msg_base, pyroute2.bsd.pf_route.freebsd.if_announcemsg, pyroute2.bsd.pf_route.rt_slot, pyroute2.bsd.pf_route.rt_msg, pyroute2.bsd.pf_route.ifa_msg, pyroute2.bsd.pf_route.ifma_msg" class="inheritance"/>
 </div>
 <div class="section" id="ipdb">
 <h2>IPDB<a class="headerlink" href="#ipdb" title="Permalink to this headline">¶</a></h2>
 <p>The <cite>IPDB</cite> module implements high-level logic to manage
 some of the system network settings. It is completely
-agnostic to the netlink object&#8217;s nature, the only requirement
+agnostic to the netlink object’s nature, the only requirement
 is that the netlink transport must provide RTNL API.</p>
 <p>So, using proper mixin classes one can create a custom
 RTNL-compatible transport. E.g., this way <cite>IPDB</cite> can work
@@ -211,13 +191,18 @@ main namespace.</p>
 <p>The <cite>IPDB</cite> architecture is not too complicated, but it
 implements some useful transaction magic, see <cite>commit()</cite>
 methods of the <cite>Transactional</cite> objects.</p>
-</div>
+<img src="_images/inheritance-0c1b6bf9bf282e1cdae685cfce6a116f7a75a086.png" alt="Inheritance diagram of pyroute2.ipdb.main.IPDB, pyroute2.ipdb.interfaces.Interface, pyroute2.ipdb.linkedset.LinkedSet, pyroute2.ipdb.linkedset.IPaddrSet, pyroute2.ipdb.routes.NextHopSet, pyroute2.ipdb.routes.Via, pyroute2.ipdb.routes.Encap, pyroute2.ipdb.routes.Metrics, pyroute2.ipdb.routes.BaseRoute, pyroute2.ipdb.routes.Route, pyroute2.ipdb.routes.MPLSRoute, pyroute2.ipdb.routes.RoutingTable, pyroute2.ipdb.routes.MPLSTable, pyroute2.ipdb.routes.RoutingTableSet, pyroute2.ipdb.rules.Rule, pyroute2.ipdb.rules.RulesDict" usemap="#inheritancebd2219997f" class="inheritance"/>
+<map id="inheritancebd2219997f" name="inheritancebd2219997f">
+<area shape="rect" id="node5" href="ipdb.html#pyroute2.ipdb.main.IPDB" target="_top" title="The class that maintains information about network setup" alt="" coords="33,227,105,252"/>
+</map></div>
 <div class="section" id="internet-protocols">
 <h2>Internet protocols<a class="headerlink" href="#internet-protocols" title="Permalink to this headline">¶</a></h2>
 <p>Beside of the netlink protocols, the library implements a
 limited set of supplementary internet protocol to play with.</p>
-<img src="_images/inheritance-019a4d34bee1d6abc5b8dde68c0a419d26e0d6e9.png" alt="Inheritance diagram of pyroute2.protocols.udpmsg, pyroute2.protocols.ip4msg, pyroute2.protocols.udp4_pseudo_header, pyroute2.protocols.ethmsg, pyroute2.dhcp.dhcp4msg.dhcp4msg" class="inheritance"/>
-</div>
+<img src="_images/inheritance-ed0c595ce08d01c093a63434be8747972b9d1183.png" alt="Inheritance diagram of pyroute2.protocols.udpmsg, pyroute2.protocols.ip4msg, pyroute2.protocols.udp4_pseudo_header, pyroute2.protocols.ethmsg, pyroute2.dhcp.dhcp4msg.dhcp4msg" usemap="#inheritance15756ada77" class="inheritance"/>
+<map id="inheritance15756ada77" name="inheritance15756ada77">
+<area shape="rect" id="node2" href="dhcp.html#pyroute2.dhcp.dhcpmsg" target="_top" title="dhcpmsg" alt="" coords="165,5,246,31"/>
+</map></div>
 </div>
 
 
@@ -236,6 +221,7 @@ limited set of supplementary internet protocol to play with.</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#netlink-messages">Netlink messages</a></li>
+<li><a class="reference internal" href="#pf-route-messages">PF_ROUTE messages</a></li>
 <li><a class="reference internal" href="#ipdb">IPDB</a></li>
 <li><a class="reference internal" href="#internet-protocols">Internet protocols</a></li>
 </ul>
@@ -251,18 +237,20 @@ limited set of supplementary internet protocol to play with.</p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
-      <li><a href="_sources/arch.txt"
+      <li><a href="_sources/arch.rst.txt"
             rel="nofollow">Show Source</a></li>
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
+    <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <div><input type="text" name="q" /></div>
-      <div><input type="submit" value="Go" /></div>
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
       <input type="hidden" name="check_keywords" value="yes" />
       <input type="hidden" name="area" value="default" />
     </form>
+    </div>
 </div>
 <script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
@@ -284,12 +272,13 @@ limited set of supplementary internet protocol to play with.</p>
         <li class="right" >
           <a href="devcontribute.html" title="Project contribution guide"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.4.12 documentation</a> &#187;</li> 
+        <li class="nav-item"><a href="http://pyroute2.org">Project home</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pyroute2 0.5.2 documentation</a> &#187;</li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2013, Peter V. Saveliev.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.4.8.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.7.2.
     </div>
   </body>
 </html>

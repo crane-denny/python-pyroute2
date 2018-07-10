@@ -52,13 +52,15 @@ class ifaddrmsg(nlmsg):
     '''
     prefix = 'IFA_'
 
+    sql_constraints = {'IFA_LOCAL': 'NOT NULL DEFAULT ""'}
+
     fields = (('family', 'B'),
               ('prefixlen', 'B'),
               ('flags', 'B'),
               ('scope', 'B'),
               ('index', 'I'))
 
-    nla_map = (('IFA_UNSPEC',  'hex'),
+    nla_map = (('IFA_UNSPEC', 'hex'),
                ('IFA_ADDRESS', 'ipaddr'),
                ('IFA_LOCAL', 'ipaddr'),
                ('IFA_LABEL', 'asciiz'),
@@ -69,7 +71,7 @@ class ifaddrmsg(nlmsg):
                ('IFA_FLAGS', 'uint32'))
 
     class cacheinfo(nla):
-        fields = (('ifa_prefered', 'I'),
+        fields = (('ifa_preferred', 'I'),
                   ('ifa_valid', 'I'),
                   ('cstamp', 'I'),
                   ('tstamp', 'I'))
