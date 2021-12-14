@@ -32,7 +32,7 @@ if config.machine in ('i386', 'i686', 'x86_64', 'armv6l', 'armv7l', 's390x'):
     TUNSETPERSIST = 0x400454cb
     TUNSETOWNER = 0x400454cc
     TUNSETGROUP = 0x400454ce
-elif config.machine in ('ppc64', 'mips'):
+elif config.machine in ('ppc64', 'mips' , 'loongarch64'):
     TUNSETIFF = 0x800454ca
     TUNSETPERSIST = 0x800454cb
     TUNSETOWNER = 0x800454cc

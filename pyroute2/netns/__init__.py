@@ -102,7 +102,8 @@ __NR = {'x86_': {'64bit': 308},
         'aarc': {'32bit': 375,
                  '64bit': 268},  # FIXME: EABI vs. OABI?
         'ppc6': {'64bit': 350},
-        's390': {'64bit': 339}}
+        's390': {'64bit': 339},
+        'loon': {'64bit': 268}}
 __NR_setns = __NR.get(config.machine[:4], {}).get(config.arch, 308)
 
 CLONE_NEWNET = 0x40000000
